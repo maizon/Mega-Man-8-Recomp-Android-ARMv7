@@ -410,6 +410,8 @@ path.write_text(source, encoding="utf-8")
 print("Added four presets built only from existing [video] runtime keys.")
 PYPRESET
 
+python3 "${ROOT}/scripts/patch-android-ui.py"
+
 test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
 test -s "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java"
 test -s "${UPSTREAM}/psxrecomp/bios/openbios.bin"
