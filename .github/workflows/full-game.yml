@@ -168,14 +168,17 @@ jobs:
           "${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner" verify --verbose "$APK"
           unzip -Z1 "$APK" > "${RUNNER_TEMP}/mm8-apk-files.txt"
           grep -Fxq 'lib/armeabi-v7a/libmain.so' "${RUNNER_TEMP}/mm8-apk-files.txt"
-          if grep -Eq '^lib/(arm64-v8a|x86|x86_64|riscv64)/' "${RUNNER_TEMP}/mm8-apk-files.txt"; then
-            echo "Unexpected non-ARMv7 native ABI in APK." >&2
+          grep -Fxq 'lib/arm64-v8a/libmain.so' "${RUNNER_TEMP}/mm8-apk-files.txt"
+          grep -Fxq 'lib/armeabi-v7a/libc++_shared.so' "${RUNNER_TEMP}/mm8-apk-files.txt"
+          grep -Fxq 'lib/arm64-v8a/libc++_shared.so' "${RUNNER_TEMP}/mm8-apk-files.txt"
+          if grep -Eq '^lib/(x86|x86_64|riscv64)/' "${RUNNER_TEMP}/mm8-apk-files.txt"; then
+            echo "Unexpected non-ARM native ABI in APK." >&2
             exit 1
           fi
           sha256sum "$APK" | tee "${RUNNER_TEMP}/mm8-full-apk.sha256"
           {
             echo "Build result: PASS — full-game APK compiled and package validated."
-            echo "This CI build validates packaging and ARMv7 ABI; physical-device play testing is still required."
+            echo "This CI build validates packaging and ARMv7 and ARM64 ABIs; physical-device play testing is still required."
             echo "Game-data release: maizon/mm8-game-data, tag Rom"
             echo "SDL commit: $(git -C third_party/SDL rev-parse HEAD)"
             echo "Game source commit: $(git -C third_party/Mega-Man-8-Recomp rev-parse HEAD)"
@@ -188,7 +191,7 @@ jobs:
       - name: Upload full-game APK and build report (private repository only)
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: MegaMan8Recomp-Android-ARMv7-FULL-GAME
+          name: MegaMan8Recomp-Android-Universal-ARMv7-ARM64-FULL-GAME
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             ${{ runner.temp }}/mm8-full-build-report.txt
