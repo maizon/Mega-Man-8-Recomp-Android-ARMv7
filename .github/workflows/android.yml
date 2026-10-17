@@ -35,6 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/build-full-android.sh
+          python3 -m py_compile scripts/patch-android-ui.py
           set +e
           output="$(bash scripts/build-full-android.sh 2>&1)"
           status=$?
