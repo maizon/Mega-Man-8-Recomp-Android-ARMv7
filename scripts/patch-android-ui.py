@@ -44,6 +44,31 @@ write(template, source)
 # Never select the software renderer from Android. OpenGL is the default; Vulkan is optional.
 activity_path = android / "PsxGameActivity.java"
 activity = read(activity_path)
+activity = activity.replace('wantsGpu(toml) ? "opengl" : "software"', 'renderer(toml)')
+method_start = activity.find("private static String renderer(File toml) {")
+if method_start < 0:
+    method_start = activity.find("private static boolean wantsGpu(File toml) {")
+if method_start < 0:
+    raise SystemExit("ERROR: PsxGameActivity renderer method anchor not found")
+method_end = activity.find("    @Override\n    protected void onCreate(Bundle state) {", method_start)
+if method_end < 0:
+    raise SystemExit("ERROR: PsxGameActivity renderer method end not found")
+renderer_method = r'''private static String renderer(File toml) {
+        try {
+            String s = new String(java.nio.file.Files.readAllBytes(toml.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("(?m)^\\s*renderer\\s*=\\s*\\\"(opengl|vulkan)\\\"")
+                    .matcher(s);
+            if (m.find()) return m.group(1);
+        } catch (java.io.IOException e) {
+            // OpenGL ES is the reliable default; software rendering is intentionally not selectable.
+        }
+        return "opengl";
+    }
+
+'''
+activity = activity[:method_start] + renderer_method + activity[method_end:]
 write(activity_path, activity)
 
 # Remove the software choice from the in-game settings too.
