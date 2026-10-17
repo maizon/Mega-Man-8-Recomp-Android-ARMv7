@@ -9,15 +9,13 @@ on:
 permissions:
   contents: read
 
-# Do not cancel a native build merely because a documentation/CI commit lands.
-# Queued runs are safer while the Android toolchain and source cache are cold.
 concurrency:
   group: android-armv7-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   build-armv7:
-    name: Build APK (armeabi-v7a)
+    name: Build and smoke-test Android ARMv7
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -40,19 +38,21 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null
 
-      # Run Gradle setup before fetching SDL: SDL ships an unrelated wrapper JAR.
+      # Run Gradle setup before fetching any third-party source; SDL ships an
+      # unrelated wrapper JAR that must not be treated as this project's wrapper.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Cache SDL3 source and native build state
+      - name: Prepare pinned Android-ready PSXRecomp framework
+        run: bash scripts/prepare-upstream.sh
+
+      - name: Cache SDL3 source
         uses: actions/cache@v4
         with:
-          path: |
-            third_party/SDL
-            android/app/.cxx
-          key: ${{ runner.os }}-armv7-sdl3-3.4.10-${{ hashFiles('android/app/src/main/cpp/**', 'android/app/build.gradle', 'android/app/src/main/AndroidManifest.xml') }}
+          path: third_party/SDL
+          key: ${{ runner.os }}-armv7-sdl3-3.4.10-${{ hashFiles('android/app/src/main/cpp/CMakeLists.txt', 'tests/android-runtime-smoke/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-armv7-sdl3-3.4.10-
 
@@ -66,10 +66,29 @@ jobs:
             echo "Using cached SDL3 3.4.10 source"
           fi
 
+      # Compile the real PSXRecomp runtime itself for 32-bit ARM without
+      # generated game C. This is stronger than only compiling the SDL shell,
+      # but it is not a playable-game test.
+      - name: Configure PSXRecomp runtime smoke build for ARMv7
+        run: |
+          cmake -S tests/android-runtime-smoke -B build/android-runtime-smoke -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/27.2.12479018/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=armeabi-v7a \
+            -DANDROID_PLATFORM=android-26 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPSXRECOMP_ROOT="$GITHUB_WORKSPACE/third_party/Mega-Man-8-Recomp/psxrecomp" \
+            -DSDL_ROOT="$GITHUB_WORKSPACE/third_party/SDL"
+          cmake --build build/android-runtime-smoke --target psx-runtime --parallel 2
+          LIB="$(find build/android-runtime-smoke -name 'libmain.so' -print -quit)"
+          test -n "$LIB" && test -s "$LIB"
+          readelf -h "$LIB" | grep -E 'Class:.*ELF32'
+          readelf -h "$LIB" | grep -E 'Machine:.*ARM'
+          readelf --dyn-syms -W "$LIB" | grep -E 'FUNC.*GLOBAL.*SDL_main'
+
       - name: Build debug APK for ARMv7
         run: gradle -p android --no-daemon --build-cache assembleDebug
 
-      - name: Verify APK, SDL entry point and native ABI
+      - name: Verify APK and native ABI
         shell: bash
         run: |
           set -euo pipefail
@@ -79,7 +98,10 @@ jobs:
           sha256sum "$APK"
           unzip -l "$APK" | tee /tmp/apk-files.txt
           grep -q 'lib/armeabi-v7a/libmain.so' /tmp/apk-files.txt
-          grep -q 'lib/armeabi-v7a/libSDL3.so' /tmp/apk-files.txt
+          if grep -q 'lib/armeabi-v7a/libSDL3.so' /tmp/apk-files.txt; then
+            echo "SDL3 should be statically linked into libmain.so for this app." >&2
+            exit 1
+          fi
           if grep -Eq 'lib/(arm64-v8a|x86|x86_64)/' /tmp/apk-files.txt; then
             echo "Unexpected non-ARMv7 native ABI found in APK" >&2
             exit 1

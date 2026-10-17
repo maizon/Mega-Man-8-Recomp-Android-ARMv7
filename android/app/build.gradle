@@ -2,9 +2,14 @@ plugins {
     id 'com.android.application'
 }
 
+def repoRoot = projectDir.parentFile.parentFile
+def upstream = new File(repoRoot, 'third_party/Mega-Man-8-Recomp')
+def generatedGameAssets = layout.buildDirectory.dir('generated/psxGameAssets')
+def requireGameRuntime = project.hasProperty('MM8_REQUIRE_GAME_RUNTIME') &&
+        project.property('MM8_REQUIRE_GAME_RUNTIME').toString().toBoolean()
+
 def cmakeArguments = ['-DANDROID_STL=c++_shared']
-if (project.hasProperty('MM8_REQUIRE_GAME_RUNTIME') &&
-    project.property('MM8_REQUIRE_GAME_RUNTIME').toString().toBoolean()) {
+if (requireGameRuntime) {
     cmakeArguments.add('-DMM8_REQUIRE_GAME_RUNTIME=ON')
 }
 
@@ -14,10 +19,15 @@ android {
 
     defaultConfig {
         applicationId 'com.maizon.megaman8recomp'
-        minSdk 23
+        minSdk 26
         targetSdk 28
         versionCode 1
         versionName '0.1.0-dev'
+        manifestPlaceholders = [
+            mm8LauncherActivity: requireGameRuntime
+                    ? 'com.psxrecomp.android.LauncherActivity'
+                    : 'com.maizon.megaman8recomp.ShellActivity'
+        ]
 
         ndk {
             abiFilters 'armeabi-v7a'
@@ -32,7 +42,13 @@ android {
     }
 
     sourceSets {
-        main.java.srcDirs += ['../../third_party/SDL/android-project/app/src/main/java']
+        main {
+            java.srcDirs += [
+                new File(repoRoot, 'third_party/SDL/android-project/app/src/main/java'),
+                new File(upstream, 'psxrecomp/runtime/android/java')
+            ]
+            assets.srcDir(generatedGameAssets)
+        }
     }
 
     externalNativeBuild {
@@ -47,4 +63,22 @@ android {
             useLegacyPackaging = true
         }
     }
+}
+
+tasks.register('stageGameAssets', Copy) {
+    def openBios = new File(upstream, 'psxrecomp/bios/openbios.bin')
+    def openBiosLicense = new File(upstream, 'psxrecomp/bios/OpenBIOS.LICENSE')
+    from(openBios) { into 'bios' }
+    from(openBiosLicense) { into 'bios' }
+    into generatedGameAssets
+    doFirst {
+        if (!openBios.isFile() || !openBiosLicense.isFile()) {
+            throw new GradleException(
+                'Pinned PSXRecomp Android framework is missing. Run scripts/prepare-upstream.sh first.')
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn('stageGameAssets')
 }

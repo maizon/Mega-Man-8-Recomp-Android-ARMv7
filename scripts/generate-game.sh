@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM="${ROOT}/third_party/Mega-Man-8-Recomp"
+FRAMEWORK_COMMIT="58e9fd9cffc582b5e3d4d2357d6a05bba7c1c69a"
 
 if [[ $# -ne 1 ]]; then
   echo "Usage: bash scripts/generate-game.sh /path/to/your/legal/Mega-Man-8.cue" >&2
@@ -14,17 +15,27 @@ if [[ ! -f "${DISC}" ]]; then
   echo "Disc cue not found: ${DISC}" >&2
   exit 2
 fi
-if [[ "${DISC,,}" != *.cue ]]; then
-  echo "Please provide the full multi-track .cue file, not a single .bin track." >&2
-  exit 2
-fi
+case "${DISC##*.}" in
+  [cC][uU][eE]) ;;
+  *)
+    echo "Please provide the complete multi-track .cue file, not a single .bin track." >&2
+    exit 2
+    ;;
+esac
+
 if [[ ! -f "${UPSTREAM}/psxrecomp/psxrecomp_cli.py" ]]; then
   echo "Upstream checkout missing. Run: bash scripts/prepare-upstream.sh" >&2
   exit 2
 fi
+actual_framework="$(git -C "${UPSTREAM}/psxrecomp" rev-parse HEAD)"
+if [[ "${actual_framework}" != "${FRAMEWORK_COMMIT}" ]]; then
+  echo "Wrong PSXRecomp framework pin: ${actual_framework}" >&2
+  echo "Run: bash scripts/prepare-upstream.sh" >&2
+  exit 1
+fi
 
 echo "Generating local Mega Man 8 sources from the supplied disc."
-echo "The disc and generated copyrighted game sources remain local; they are not uploaded by this script."
+echo "The disc and generated copyrighted game sources stay local; this script does not upload them."
 
 python3 "${UPSTREAM}/psxrecomp/psxrecomp_cli.py" generate \
   --config "${UPSTREAM}/game.toml" \
@@ -48,27 +59,23 @@ if (( ${#game_dispatch[@]} == 0 )); then
   exit 1
 fi
 if [[ ! -s "${bios_full_source}" || ! -s "${bios_dispatch_source}" ]]; then
-  echo "ERROR: OpenBIOS generated C files are missing under ${bios_source}" >&2
+  echo "ERROR: OpenBIOS C files are missing under ${bios_source}" >&2
   exit 1
 fi
 
-# This game project's legacy CMakeLists.txt expects its BIOS C files under
-# <game-root>/bios-generated, while current psxrecomp_cli.py emits them under
-# the framework submodule's generated/ directory. Stage local copies into the
-# path the game's CMake actually consumes.
+# The game CMakeLists expects BIOS C at the game root, while the framework
+# generator emits it in psxrecomp/generated. Stage local copies at that path.
 mkdir -p "${bios_output}"
 cp "${bios_full_source}" "${bios_output}/OpenBIOS_full.c"
 cp "${bios_dispatch_source}" "${bios_output}/OpenBIOS_dispatch.c"
 
-if [[ ! -s "${bios_output}/OpenBIOS_full.c" || ! -s "${bios_output}/OpenBIOS_dispatch.c" ]]; then
-  echo "ERROR: failed to stage OpenBIOS C files for the game CMake target" >&2
-  exit 1
-fi
+test -s "${bios_output}/OpenBIOS_full.c"
+test -s "${bios_output}/OpenBIOS_dispatch.c"
 
 echo
 echo "Generation checks passed:"
-printf '  game full source files: %s\n' "${#game_full[@]}"
-printf '  game dispatch files:   %s\n' "${#game_dispatch[@]}"
-echo "  OpenBIOS full + dispatch: staged into bios-generated/"
+printf '  game full C files:       %s\n' "${#game_full[@]}"
+printf '  game dispatch C files:   %s\n' "${#game_dispatch[@]}"
+echo "  OpenBIOS full + dispatch: staged"
 echo
 echo "Next: gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true assembleDebug"

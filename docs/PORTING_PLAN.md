@@ -1,57 +1,32 @@
 # Android ARMv7 port plan
 
-## Current verified status (2026-10-17)
+## Current status
 
-- [x] Create Android Gradle module.
-- [x] Restrict native ABI to `armeabi-v7a`.
-- [x] Integrate SDL3 Android Java activity and native CMake build shell.
-- [x] GitHub Actions builds a debug APK and uploads an artifact.
-- [x] Build run #12 completed the APK build, existence check, and artifact upload.
-- [ ] Verify the APK on a physical ARMv7 device.
-- [ ] Verify the new CI check confirms the APK contains 32-bit ARM native libraries only.
+- [x] Create the Android Gradle module and SDL3 ARMv7 shell.
+- [x] Pin the game source and Android-enabled PSXRecomp framework.
+- [x] Add a local generation script for the user's own matching disc.
+- [x] Add the Android framework launcher, touch pad and OpenBIOS asset staging to the app.
+- [x] Add strict CMake mode that refuses to silently build the shell as the game.
+- [x] Add CI checks for the shell APK's ELF32 ARM libraries and SDL entry point.
+- [ ] Pass the new framework runtime smoke build for `armeabi-v7a`.
+- [ ] Compile the real generated Mega Man 8 C and OpenBIOS sources for ARMv7.
+- [ ] Install and reach gameplay on a physical ARMv7 Android device.
 
-The successful APK is still a **SDL3 shell**, not a playable game. The current `main.cpp` only initializes SDL, creates a fullscreen window, and polls events.
+## Key architecture decisions
 
-## Milestone 1 — Runtime audit
+1. Use the audited game source commit `e9f808fa40c04592d1d95808c658c460c1c808d9`.
+2. Use the Android-enabled PSXRecomp framework commit `58e9fd9cffc582b5e3d4d2357d6a05bba7c1c69a`, rather than assuming the game's original framework gitlink supports Android.
+3. Build SDL3 3.4.10 statically into `libmain.so`, matching the Android framework activity's library-loading contract.
+4. Use the framework's Android Java launcher and touch/gamepad layer. Disable the desktop recomp-ui launcher, Vulkan and rewind in the Android-only local CMake patch for the initial baseline.
+5. Keep the legal disc, generated game C, prepared disc and generated OpenBIOS C local and ignored by Git.
+6. Run a runtime-only ARMv7 smoke build in CI even though the public repository cannot contain the generated copyrighted game code.
 
-- [x] Inspect upstream game's root CMake and game configuration.
-- [x] Identify upstream submodules: `psxrecomp` and `recomp-ui`.
-- [x] Inspect Android reference project `dguillot-gh/psxrecomp-android` and orchestration repo `dguillot-gh/psx-android`.
-- [x] Review `Simon358/ctr-native-android` as an Android/SDL3/ARMv7 structural reference.
-- [ ] Pin upstream game and submodule revisions in this repository.
-- [ ] Map all PSXRecomp target dependencies and platform-specific sources/options.
-- [ ] Determine the minimum dependency set that can compile under Android NDK/ARMv7.
+## Required local build
 
-### Findings and constraints
+```bash
+bash scripts/prepare-upstream.sh
+bash scripts/generate-game.sh "/path/to/your/Mega Man 8 (USA).cue"
+gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true assembleDebug
+```
 
-1. Upstream game's CMake includes `psxrecomp/runtime/runtime.cmake` and calls `psxrecomp_add_runtime_target`. It collects `generated/*_full*.c`, `generated/*_dispatch.c`, and OpenBIOS generated C files. These sources are absent from this Android scaffold and need to be generated from a user-provided matching game dump using the upstream tooling.
-2. Upstream forces `PSX_LAUNCHER=ON` and `PSX_RECOMP_UI=ON`. Those defaults must not be carried over blindly; Android needs an intentional launcher/UI strategy.
-3. The Android-focused fork has SDL3 compatibility wrappers and an extensive runtime, but its orchestration documentation reports testing on a 64-bit Android device. That is useful architectural evidence, not proof that its current branch builds or runs on `armeabi-v7a`.
-4. The framework runtime CMake pulls in multiple dependency modules (including CHD, OpenXR, overlays, and netplay). Android integration should disable unsupported/unused features explicitly and avoid fetching host-only dependencies where possible.
-5. CTR Native demonstrates useful Android activity, SDL loading, input, and packaging patterns, but its game-specific native compatibility layer is not a replacement for PSXRecomp's runtime.
-
-## Milestone 2 — Runtime integration
-
-- [ ] Replace the SDL shell with the PSXRecomp runtime entry point.
-- [ ] Add upstream source as pinned dependencies without silently modifying upstream files.
-- [ ] Keep desktop-only launcher/UI code out of the Android target or provide an Android implementation.
-- [ ] Compile and link the generated game and OpenBIOS sources.
-- [ ] Confirm compiler flags and generated C compile safely for 32-bit ARM (including 32-bit pointer/size assumptions).
-
-## Milestone 3 — Android experience
-
-- [ ] Add a file picker for the user's own legally obtained game data.
-- [ ] Persist selected data in app-private storage and validate required files.
-- [ ] Add configurable touch controls and SDL3 gamepad mapping.
-- [ ] Verify audio initialization, lifecycle pause/resume, rendering, and frame pacing.
-
-## Milestone 4 — Verification
-
-- [x] CI build passes reproducibly for the SDL3 shell.
-- [ ] CI verifies APK ABI and native libraries.
-- [ ] APK installs and launches on a physical ARMv7 device.
-- [ ] App loads user-provided data and reaches gameplay.
-- [ ] Gameplay and performance tested; limitations documented.
-- [ ] Publish a release only after actual runtime testing.
-
-A successful build of the initial SDL shell is an infrastructure milestone only; it is not a playable game port. Do not report a success probability of 99% until a real ARMv7 device test confirms startup and gameplay.
+Do not call the result playable until the strict generated-game build succeeds and a physical ARMv7 device reaches gameplay with working controls, video and audio. A 99.9% confidence claim is not supported before those checks.

@@ -1,0 +1,33 @@
+# Android template. The app fills @@DISC1@@ with the user's imported cue/image.
+[game]
+name = "Mega Man 8"
+id = "SLUS-00453"
+players = 1
+exe = "input/SLUS_004.53"
+discs = [
+  @@DISC1@@,
+]
+load_address = "0x800C0000"
+entry_pc = "0x800C0B3C"
+text_size = "0x00113000"
+stack_base = "0x801FFFF0"
+
+[recompiler]
+seeds = "seeds/functions.txt"
+strict = true
+out_dir = "generated"
+
+[runtime]
+window_title = "Mega Man 8 Recompiled"
+bios_hle = false
+openbios = true
+overlay_cache = true
+
+[video]
+renderer = "software"
+
+[controller]
+default_mode = "digital"
+
+[bios]
+path = "bios/openbios.bin"

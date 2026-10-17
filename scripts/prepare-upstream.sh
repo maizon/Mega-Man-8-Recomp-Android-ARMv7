@@ -2,26 +2,92 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="${ROOT}/third_party/Mega-Man-8-Recomp"
+UPSTREAM="${ROOT}/third_party/Mega-Man-8-Recomp"
+GAME_URL="https://github.com/omegakatana92/Mega-Man-8-Recomp.git"
+FRAMEWORK_URL="https://github.com/dguillot-gh/psxrecomp-android.git"
 GAME_COMMIT="e9f808fa40c04592d1d95808c658c460c1c808d9"
+FRAMEWORK_COMMIT="58e9fd9cffc582b5e3d4d2357d6a05bba7c1c69a"
 
-if [[ ! -d "${DEST}/.git" ]]; then
+if [[ ! -d "${UPSTREAM}/.git" && ! -f "${UPSTREAM}/.git" ]]; then
+  if [[ -e "${UPSTREAM}" ]]; then
+    echo "ERROR: ${UPSTREAM} exists but is not a Git checkout; refusing to overwrite it." >&2
+    exit 1
+  fi
   mkdir -p "${ROOT}/third_party"
-  git clone https://github.com/omegakatana92/Mega-Man-8-Recomp.git "${DEST}"
+  git clone --no-recurse-submodules "${GAME_URL}" "${UPSTREAM}"
 fi
 
-git -C "${DEST}" fetch origin "${GAME_COMMIT}"
-git -C "${DEST}" checkout --detach "${GAME_COMMIT}"
-git -C "${DEST}" submodule sync --recursive
-git -C "${DEST}" submodule update --init --recursive
+git -C "${UPSTREAM}" remote set-url origin "${GAME_URL}"
+git -C "${UPSTREAM}" fetch origin "${GAME_COMMIT}"
+git -C "${UPSTREAM}" checkout --detach "${GAME_COMMIT}"
+
+# The game's original psxrecomp gitlink is not Android-ready. Pin the audited
+# Android runtime fork in that local submodule path; no framework code is copied
+# into this repository and no game data is downloaded.
+if [[ -d "${UPSTREAM}/psxrecomp/.git" || -f "${UPSTREAM}/psxrecomp/.git" ]]; then
+  git -C "${UPSTREAM}/psxrecomp" remote set-url origin "${FRAMEWORK_URL}"
+  git -C "${UPSTREAM}/psxrecomp" fetch origin android
+  git -C "${UPSTREAM}/psxrecomp" fetch origin "${FRAMEWORK_COMMIT}"
+  git -C "${UPSTREAM}/psxrecomp" checkout --detach "${FRAMEWORK_COMMIT}"
+else
+  rm -rf "${UPSTREAM}/psxrecomp"
+  git clone --branch android --single-branch "${FRAMEWORK_URL}" "${UPSTREAM}/psxrecomp"
+  git -C "${UPSTREAM}/psxrecomp" checkout --detach "${FRAMEWORK_COMMIT}"
+fi
+
+git -C "${UPSTREAM}/psxrecomp" submodule sync --recursive
+git -C "${UPSTREAM}/psxrecomp" submodule update --init --recursive
+# Keep the upstream UI submodule available for desktop-side inspection, even
+# though the Android CMake patch below disables its desktop launcher target.
+git -C "${UPSTREAM}" submodule update --init recomp-ui
+
+# Patch only the local ignored checkout. The Android app has its own Java start
+# menu and touch pad, so it must not compile the desktop recomp-ui launcher.
+python3 - "${UPSTREAM}/CMakeLists.txt" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+old = 'set(PSX_LAUNCHER ON CACHE BOOL "" FORCE)\nset(PSX_RECOMP_UI ON CACHE BOOL "" FORCE)'
+new = '''set(PSX_LAUNCHER ON CACHE BOOL "" FORCE)
+if(ANDROID)
+    set(PSX_RECOMP_UI OFF CACHE BOOL "" FORCE)
+    set(PSX_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
+    set(PSX_REWIND OFF CACHE BOOL "" FORCE)
+else()
+    set(PSX_RECOMP_UI ON CACHE BOOL "" FORCE)
+endif()'''
+
+if new in source:
+    print("Android CMake options already patched.")
+elif old in source:
+    path.write_text(source.replace(old, new, 1), encoding="utf-8")
+    print("Patched Android CMake options in the local upstream checkout.")
+else:
+    raise SystemExit(
+        "ERROR: upstream CMake layout changed; refusing an unsafe automatic patch."
+    )
+PY
+
+test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
+test -s "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java"
+test -s "${UPSTREAM}/psxrecomp/bios/openbios.bin"
+test -s "${UPSTREAM}/psxrecomp/bios/OpenBIOS.LICENSE"
+
+actual_game="$(git -C "${UPSTREAM}" rev-parse HEAD)"
+actual_framework="$(git -C "${UPSTREAM}/psxrecomp" rev-parse HEAD)"
+if [[ "${actual_game}" != "${GAME_COMMIT}" || "${actual_framework}" != "${FRAMEWORK_COMMIT}" ]]; then
+  echo "ERROR: upstream pin verification failed." >&2
+  echo "Game: ${actual_game}" >&2
+  echo "Framework: ${actual_framework}" >&2
+  exit 1
+fi
 
 echo
-echo "Upstream game checkout pinned at:"
-git -C "${DEST}" rev-parse HEAD
-echo
-echo "Submodule revisions:"
-git -C "${DEST}" submodule status --recursive
-echo
-echo "This script does not generate game code and does not include a game disc or BIOS dump."
-echo "The real Android runtime activates only after generated game and OpenBIOS C sources exist."
-echo "Do not commit or distribute generated copyrighted game code, disc images, or BIOS dumps."
+echo "Pinned game:      ${actual_game}"
+echo "Pinned framework: ${actual_framework}"
+echo "Android Java layer and OpenBIOS assets: present"
+echo "No disc image, retail BIOS dump, or generated game C was downloaded."
+echo "Next, generate from your own matching disc with:"
+echo "  bash scripts/generate-game.sh /path/to/your/Mega-Man-8.cue"
