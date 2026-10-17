@@ -52,18 +52,18 @@ jobs:
           path: |
             third_party/SDL
             android/app/.cxx
-          key: ${{ runner.os }}-armv7-sdl3-3.2.16-${{ hashFiles('android/app/src/main/cpp/**', 'android/app/build.gradle', 'android/app/src/main/AndroidManifest.xml') }}
+          key: ${{ runner.os }}-armv7-sdl3-3.4.10-${{ hashFiles('android/app/src/main/cpp/**', 'android/app/build.gradle', 'android/app/src/main/AndroidManifest.xml') }}
           restore-keys: |
-            ${{ runner.os }}-armv7-sdl3-3.2.16-
+            ${{ runner.os }}-armv7-sdl3-3.4.10-
 
       - name: Fetch SDL3 source if cache missed
         run: |
-          if [ ! -f third_party/SDL/CMakeLists.txt ]; then
+          if [ ! -f third_party/SDL/CMakeLists.txt ] || ! grep -q 'SDL_VERSION 3.4.10' third_party/SDL/CMakeLists.txt; then
             rm -rf third_party/SDL
             mkdir -p third_party
-            git clone --depth 1 --branch release-3.2.16 https://github.com/libsdl-org/SDL.git third_party/SDL
+            git clone --depth 1 --branch release-3.4.10 https://github.com/libsdl-org/SDL.git third_party/SDL
           else
-            echo "Using cached SDL3 source"
+            echo "Using cached SDL3 3.4.10 source"
           fi
 
       - name: Build debug APK for ARMv7
