@@ -18,7 +18,7 @@ Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92
 
 The workflow at [GitHub Actions](https://github.com/maizon/Mega-Man-8-Recomp-Android-ARMv7/actions) has two independent jobs:
 
-1. **android-shell** builds a debug APK without a disc image or generated game C, then checks ZIP integrity, zip alignment, development signature, package ID, min/target SDK, launcher activity, ARMv7 and ARM64 ELF headers, `SDL_main` export and native dependencies. It also runs a negative CMake test to prove strict mode rejects missing generated game/OpenBIOS inputs. The artifact is explicitly named `SHELL-debug`.
+1. **android-shell** builds a debug APK without a disc image or generated game C, then checks ZIP integrity, zip alignment, development signature, package ID, min/target SDK, launcher activity, ARMv7 and ARM64 ELF headers, `SDL_main` export and native dependencies. It also runs a negative CMake test to prove strict mode rejects missing generated game/OpenBIOS inputs. The artifact is explicitly named `Universal ARMv7+ARM64 SHELL-debug`.
 2. **android-runtime-smoke** compiles and links the real PSXRecomp runtime against SDL3 for ARMv7 without game-generated C. It publishes a separate `RUNTIME-SMOKE-NOT-GAME` library/report artifact. It is not an APK and not a playable game.
 
 Both jobs use a clean CMake/native build directory, fixed tool versions and pinned action commit SHAs. The shell job does not depend on the runtime job. The workflow supports push, pull request and manual `workflow_dispatch`.
@@ -37,13 +37,13 @@ The CI uses the exact SDL commit listed above and verifies it after checkout. `p
 
 ## One-command full-game Android build (requires the user's own legal disc)
 
-Run the build driver to prepare pinned public sources, validate the matching disc, generate game code locally, compile in strict mode, and verify the final ARMv7 APK. It refuses to silently fall back to the shell and keeps generated copyrighted sources local.
+Run the build driver to prepare pinned public sources, validate the matching disc, generate game code locally, compile in strict mode, and verify the final universal ARMv7 + ARM64 APK. It refuses to silently fall back to the shell and keeps generated copyrighted sources local.
 
 ```bash
 bash scripts/build-full-android.sh "/path/to/your/Mega Man 8 (USA).cue"
 ```
 
-The script expects Java 17, Git, Python 3, Gradle 8.9, and an Android SDK/NDK configured in the environment. It verifies the game/framework/SDL source pins, strict-mode result, APK signature, package metadata, ARMv7 ELF headers and exported `SDL_main`, then writes a SHA-256 build report under `android/app/build/mm8-final-build-report.txt`. It still does not prove physical-device gameplay.
+The script expects Java 17, Git, Python 3, Gradle 8.9, and an Android SDK/NDK configured in the environment. It verifies the game/framework/SDL source pins, strict-mode result, APK signature, package metadata, ARMv7 and ARM64 ELF headers and exported `SDL_main`, then writes a SHA-256 build report under `android/app/build/mm8-final-build-report.txt`. It still does not prove physical-device gameplay.
 
 ## Prepare the full game build (requires the user's own legal disc)
 
@@ -60,7 +60,7 @@ Strict mode verifies the exact pinned source revisions and rejects missing or em
 
 ## What is not yet proven
 
-- The shell APK is build-validated by CI, but it has not been claimed as installed on a physical ARMv7 device.
+- The universal shell APK is a build-validation artifact only, not a playable game; it has not been claimed as installed on physical ARMv7 or ARM64 devices.
 - Runtime smoke proves native compilation/linking of the framework without generated game C, not full-game compilation.
 - A complete game requires the matching local disc, generated sources, a strict full build, installation and real gameplay checks on compatible hardware.
 - No honest 99.9% playability guarantee is possible before those tests pass.
