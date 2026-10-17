@@ -230,6 +230,53 @@ activity_path.write_text(activity, encoding="utf-8")
 print("Enabled selectable Software/OpenGL ES/Vulkan renderer modes in the local Android framework.")
 PY
 
+
+# Vulkan diagnostics + conservative Android transform selection.  Identity is
+# preferred only when explicitly supported; otherwise use the surface's required
+# transform. Log real window/pixel/surface dimensions to diagnose portrait-sized
+# swapchains without spamming per-frame logs.
+python3 - "${UPSTREAM}/psxrecomp/runtime/src/gpu_vk_renderer.c" <<'PYVK'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+old_transform = "    ci.preTransform = caps.currentTransform;"
+new_transform = """    /* Prefer identity when the surface supports it: this keeps the rendered
+     * landscape viewport in native swapchain coordinates and avoids applying
+     * an implicit 90-degree transform on Android. If unsupported, honor the
+     * transform required by the surface. */
+    VkSurfaceTransformFlagBitsKHR selected_transform = caps.currentTransform;
+    if (caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+        selected_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    ci.preTransform = selected_transform;
+    int logical_w = 0, logical_h = 0, pixel_w = 0, pixel_h = 0;
+    SDL_GetWindowSize(s_win, &logical_w, &logical_h);
+#if defined(PSX_SDL3)
+    SDL_GetWindowSizeInPixels(s_win, &pixel_w, &pixel_h);
+#else
+    SDL_Vulkan_GetDrawableSize(s_win, &pixel_w, &pixel_h);
+#endif
+    fprintf(stdout,
+            "psxrecomp: Vulkan surface diag logical=%dx%d pixels=%dx%d "
+            "capsExtent=%ux%u swapExtent=%ux%u currentTransform=0x%x "
+            "supportedTransforms=0x%x selectedPreTransform=0x%x minExtent=%ux%u maxExtent=%ux%u\\n",
+            logical_w, logical_h, pixel_w, pixel_h,
+            caps.currentExtent.width, caps.currentExtent.height,
+            ext.width, ext.height, (unsigned)caps.currentTransform,
+            (unsigned)caps.supportedTransforms, (unsigned)selected_transform,
+            caps.minImageExtent.width, caps.minImageExtent.height,
+            caps.maxImageExtent.width, caps.maxImageExtent.height);"""
+if source.count(new_transform) == 1:
+    print("Vulkan transform diagnostics already patched.")
+elif source.count(old_transform) == 1:
+    source = source.replace(old_transform, new_transform, 1)
+    path.write_text(source, encoding="utf-8")
+    print("Patched Vulkan transform selection and swapchain diagnostics.")
+else:
+    raise SystemExit(f"Expected one preTransform assignment, found {source.count(old_transform)}")
+PYVK
+
 test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
 test -s "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java"
 test -s "${UPSTREAM}/psxrecomp/bios/openbios.bin"
