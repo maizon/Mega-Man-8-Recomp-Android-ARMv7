@@ -13,13 +13,24 @@ if(NOT EXISTS "${SDL_ROOT}/CMakeLists.txt")
     message(FATAL_ERROR "SDL3 source not found at ${SDL_ROOT}. The GitHub Actions workflow must fetch SDL3 first.")
 endif()
 
-# SDLActivity loads libSDL3.so followed by libmain.so on Android.
+# Keep only SDL subsystems required for this native Android bring-up.
 set(SDL_SHARED ON CACHE BOOL "" FORCE)
 set(SDL_STATIC OFF CACHE BOOL "" FORCE)
 set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+set(SDL_GPU OFF CACHE BOOL "" FORCE)
+set(SDL_RENDER ON CACHE BOOL "" FORCE)
+set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
 add_subdirectory("${SDL_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/SDL3")
 
+# SDLActivity loads libSDL3.so and then libmain.so.
 add_library(main SHARED main.cpp)
 target_compile_features(main PRIVATE cxx_std_17)
 target_compile_definitions(main PRIVATE SDL_MAIN_HANDLED)
-target_link_libraries(main PRIVATE SDL3::SDL3-shared android log)
+target_link_libraries(main PRIVATE SDL3::SDL3 android log GLESv2)
