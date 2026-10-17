@@ -145,14 +145,25 @@ jobs:
             exit 1
           fi
 
+          rm -rf /tmp/mm8-apk-native
           mkdir -p /tmp/mm8-apk-native
-          unzip -jo "${APK}" 'lib/armeabi-v7a/*.so' -d /tmp/mm8-apk-native
-          readelf --dyn-syms -W /tmp/mm8-apk-native/libmain.so | grep -E 'FUNC.*GLOBAL.*SDL_main'
-          readelf -d /tmp/mm8-apk-native/libmain.so | grep -F 'Shared library: [libc++_shared.so]'
-          for lib in /tmp/mm8-apk-native/*.so; do
-            echo "Validating ${lib}"
-            readelf -h "${lib}" | grep -E 'Class:.*ELF32'
-            readelf -h "${lib}" | grep -E 'Machine:.*ARM'
+          for abi in armeabi-v7a arm64-v8a; do
+            abi_dir="/tmp/mm8-apk-native/\${abi}"
+            mkdir -p "\${abi_dir}"
+            unzip -jo "\${APK}" "lib/\${abi}/*.so" -d "\${abi_dir}"
+            readelf --dyn-syms -W "\${abi_dir}/libmain.so" | grep -E 'FUNC.*GLOBAL.*SDL_main'
+            readelf -d "\${abi_dir}/libmain.so" | grep -F 'Shared library: [libc++_shared.so]'
+            for lib in "\${abi_dir}"/*.so; do
+              echo "Validating \${lib}"
+              header="$(readelf -h "\${lib}")"
+              if [[ "\${abi}" == "armeabi-v7a" ]]; then
+                grep -Eq 'Class:.*ELF32' <<< "\${header}"
+                grep -Eq 'Machine:.*ARM' <<< "\${header}"
+              else
+                grep -Eq 'Class:.*ELF64' <<< "\${header}"
+                grep -Eq 'Machine:.*AArch64' <<< "\${header}"
+              fi
+            done
           done
 
           mkdir -p "$(dirname "${REPORT}")"
@@ -167,16 +178,14 @@ jobs:
             echo "Development signing verification:"
             cat /tmp/mm8-apksigner.txt
             echo
-            echo "Native entry point:"
-            readelf --dyn-syms -W /tmp/mm8-apk-native/libmain.so | grep -E 'FUNC.*GLOBAL.*SDL_main'
-            echo
-            echo "Native dependencies:"
-            readelf -d /tmp/mm8-apk-native/libmain.so | grep 'Shared library'
-            echo
-            echo "ELF architecture:"
-            for lib in /tmp/mm8-apk-native/*.so; do
-              echo "${lib}"
-              readelf -h "${lib}" | grep -E 'Class:|Machine:'
+            echo "Native entry points, dependencies and ELF architecture:"
+            for abi in armeabi-v7a arm64-v8a; do
+              echo "ABI: ${abi}"
+              readelf --dyn-syms -W "/tmp/mm8-apk-native/${abi}/libmain.so" | grep -E 'FUNC.*GLOBAL.*SDL_main'
+              readelf -d "/tmp/mm8-apk-native/${abi}/libmain.so" | grep 'Shared library'
+              for lib in "/tmp/mm8-apk-native/${abi}"/*.so; do
+                readelf -h "${lib}" | grep -E 'Class:|Machine:'
+              done
             done
           } > "${REPORT}"
           cat "${REPORT}"
@@ -204,7 +213,7 @@ jobs:
       - name: Upload validated shell APK and report
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: MegaMan8Recomp-Android-ARMv7-SHELL-debug
+          name: MegaMan8Recomp-Android-Universal-ARMv7-ARM64-SHELL-debug
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/reports/mm8-armv7-verification.txt
