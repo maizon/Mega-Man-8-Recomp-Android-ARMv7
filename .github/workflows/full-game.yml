@@ -146,9 +146,6 @@ jobs:
           echo "b9e83bd1e8d1c0dcc5bccd69e64dffc2d0c41cac2f60b452ed0c9b651bba1932  ${DISC_DIR}/Mega.Man.8.cue" | sha256sum --check
           echo "Disc assets downloaded and verified against the expected sizes and SHA-256 digests."
 
-      - name: Prepare pinned PSXRecomp framework and runtime patches
-        run: bash scripts/prepare-upstream.sh
-
       - name: Fetch SDL3 at the pinned release commit
         shell: bash
         run: |
