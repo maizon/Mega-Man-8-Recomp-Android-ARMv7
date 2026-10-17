@@ -9,9 +9,11 @@ on:
 permissions:
   contents: read
 
+# Do not cancel a native build merely because a documentation/CI commit lands.
+# Queued runs are safer while the Android toolchain and source cache are cold.
 concurrency:
   group: android-armv7-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-armv7:
@@ -44,7 +46,6 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      # Cache source and native CMake state; Gradle action caches dependencies/build outputs.
       - name: Cache SDL3 source and native build state
         uses: actions/cache@v4
         with:
