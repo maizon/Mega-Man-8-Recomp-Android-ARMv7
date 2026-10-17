@@ -2,7 +2,7 @@ name: Mega Man 8 Recomp — Android ARMv7
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feature/mali-supreme-armv7]
   pull_request:
   workflow_dispatch:
 
