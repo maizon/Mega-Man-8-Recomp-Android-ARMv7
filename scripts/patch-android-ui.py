@@ -208,7 +208,9 @@ settings_methods = r'''
         String aspect = prefs.getString("aspect_ratio", "16:9");
         if (!"4:3".equals(aspect)) aspect = "16:9";
         String aa = "true".equals(prefs.getString("antialiasing", "false")) ? "true" : "false";
-        String filter = "bilinear".equals(prefs.getString("texture_filtering", "nearest")) ? "\"bilinear\"" : "\"nearest\"";
+        String quote = String.valueOf((char) 34);
+        String filter = "bilinear".equals(prefs.getString("texture_filtering", "nearest"))
+                ? quote + "bilinear" + quote : quote + "nearest" + quote;
         String perspective = "true".equals(prefs.getString("perspective_texturing", "false")) ? "true" : "false";
         try {
             String source = new String(java.nio.file.Files.readAllBytes(config.toPath()),
