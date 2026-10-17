@@ -21,7 +21,7 @@ bash scripts/generate-game.sh "/path/to/your/Mega Man 8 (USA).cue"
 gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true assembleDebug
 ```
 
-The first script pins the game source and Android-enabled PSXRecomp framework and initializes its public submodules. It applies Android-only CMake settings to the ignored local checkout (disable the desktop recomp-ui launcher, Vulkan and rewind) and a local ARMv7 compatibility fix for an AArch64-only NEON reduction intrinsic. It does not modify tracked files in this repository.
+The first script pins the game source and Android-enabled PSXRecomp framework and initializes its public submodules. It applies Android-only CMake settings to the ignored local checkout (disable the desktop recomp-ui launcher, Vulkan and rewind), an ARMv7 compatibility fix for an AArch64-only NEON reduction intrinsic, and a guard around a desktop OpenXR path that references `glReadBuffer` unavailable in Android GLESv2. It does not modify tracked upstream files in this repository.
 
 The second script invokes the pinned framework's supported `psxrecomp_cli.py generate` workflow, validates the game and OpenBIOS outputs, and stages the generated OpenBIOS C files at the path expected by the game's CMake. Generation can download/build the framework's host-side emitters and toolchain. Use a matching USA multi-track `.cue` with its track files.
 

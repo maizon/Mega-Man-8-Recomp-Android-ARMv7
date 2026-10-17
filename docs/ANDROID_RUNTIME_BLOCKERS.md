@@ -19,9 +19,14 @@ The upstream game repository's original `psxrecomp` gitlink points at a framewor
 - The real runtime target is compiled with `-O2` even in the debug APK to avoid the extreme slowdown of `-O0` for a CPU-bound static recompilation.
 - CMake rejects non-Android builds and non-`armeabi-v7a` ABIs for this app.
 
-## ARMv7-specific compatibility finding
+## ARMv7/GLES compatibility findings
 
-The first ARMv7 runtime smoke compile reached the MDEC SIMD source and exposed an AArch64-only intrinsic: `vaddvq_s32` is not available in the 32-bit ARM NEON header. The local preparation script now patches that reduction to sum the four NEON lanes on ARMv7 while preserving the horizontal-add intrinsic on AArch64. The next runtime smoke run must verify this correction and may expose additional compiler/linker issues.
+The first ARMv7 runtime smoke compile exposed two upstream platform assumptions:
+
+1. The MDEC NEON dot-product used `vaddvq_s32`, an AArch64-only intrinsic unavailable in 32-bit ARM NEON. The local preparation script now sums the four lanes on ARMv7 and preserves the AArch64 fast path.
+2. The OpenXR native-copy function in `gpu_gl_renderer.c` directly referenced desktop `glReadBuffer`, which is not exported by Android GLESv2. OpenXR is disabled for the initial Android baseline; the local patch compiles that native-copy implementation out on Android while preserving it for desktop builds.
+
+The next runtime smoke run must verify these changes and may expose further compiler or linker issues. These are local patches to the ignored third-party checkout; no tracked upstream source is rewritten.
 
 ## Generation requirements
 
