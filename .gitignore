@@ -4,5 +4,6 @@ local.properties
 .externalNativeBuild/
 .cxx/
 third_party/SDL/
+third_party/Mega-Man-8-Recomp/
 *.apk
 *.aab
