@@ -21,6 +21,10 @@ android {
             cmake {
                 cppFlags '-std=c++17'
                 arguments '-DANDROID_STL=c++_shared'
+                if (project.hasProperty('MM8_REQUIRE_GAME_RUNTIME') &&
+                    project.property('MM8_REQUIRE_GAME_RUNTIME').toString().toBoolean()) {
+                    arguments '-DMM8_REQUIRE_GAME_RUNTIME=ON'
+                }
             }
         }
     }
