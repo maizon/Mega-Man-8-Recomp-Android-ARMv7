@@ -276,6 +276,7 @@ jobs:
           set -euo pipefail
           CMAKE="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
           rm -rf build/android-runtime-smoke
+          CONFIG_LOG="${RUNNER_TEMP}/mm8-vulkan-configure.log"
           "${CMAKE}" -S tests/android-runtime-smoke -B build/android-runtime-smoke -G Ninja \
             -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
             -DCMAKE_TOOLCHAIN_FILE="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/build/cmake/android.toolchain.cmake" \
@@ -283,7 +284,11 @@ jobs:
             -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release \
             -DPSXRECOMP_ROOT="${GITHUB_WORKSPACE}/third_party/Mega-Man-8-Recomp/psxrecomp" \
-            -DSDL_ROOT="${GITHUB_WORKSPACE}/third_party/SDL"
+            -DSDL_ROOT="${GITHUB_WORKSPACE}/third_party/SDL" 2>&1 | tee "${CONFIG_LOG}"
+          if ! grep -Fq "Vulkan backend: headers" "${CONFIG_LOG}"; then
+            echo "Vulkan backend did not compile in; refusing to count a software-stub build as Vulkan validation." >&2
+            exit 1
+          fi
           "${CMAKE}" --build build/android-runtime-smoke --target psx-runtime --parallel 2 --verbose
 
           mapfile -t libs < <(find build/android-runtime-smoke -type f -name 'libmain.so' -print)
