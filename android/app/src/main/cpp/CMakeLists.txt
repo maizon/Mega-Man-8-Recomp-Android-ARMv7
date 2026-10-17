@@ -115,7 +115,7 @@ if(_mm8_real_runtime)
         message(FATAL_ERROR "Upstream CMake did not create the expected psx-runtime target")
     endif()
 
-    target_compile_options(psx-runtime PRIVATE -O2)
+    target_compile_options(psx-runtime PRIVATE -O3)
     get_target_property(_mm8_runtime_definitions psx-runtime COMPILE_DEFINITIONS)
     if(_mm8_runtime_definitions)
         list(REMOVE_ITEM _mm8_runtime_definitions "SDL_MAIN_HANDLED")
