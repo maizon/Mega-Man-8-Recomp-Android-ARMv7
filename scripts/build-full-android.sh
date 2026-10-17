@@ -66,40 +66,41 @@ if [[ ! -s "${APK}" ]]; then
 fi
 APK_SHA256="$(sha256sum "${APK}" | awk '{print $1}')"
 unzip -t "${APK}" >/dev/null
-unzip -Z1 "\${APK}" > "\${ROOT}/android/app/build/mm8-final-apk-files.txt"
-APK_FILES="\${ROOT}/android/app/build/mm8-final-apk-files.txt"
+unzip -Z1 "${APK}" > "${ROOT}/android/app/build/mm8-final-apk-files.txt"
+APK_FILES="${ROOT}/android/app/build/mm8-final-apk-files.txt"
 for abi in armeabi-v7a arm64-v8a; do
-  grep -Fxq "lib/\${abi}/libmain.so" "\${APK_FILES}"
-  grep -Fxq "lib/\${abi}/libc++_shared.so" "\${APK_FILES}"
+  grep -Fxq "lib/${abi}/libmain.so" "${APK_FILES}"
+  grep -Fxq "lib/${abi}/libc++_shared.so" "${APK_FILES}"
 done
-if grep -Eq '^lib/(x86|x86_64|riscv64)/' "\${APK_FILES}"; then
+if grep -Eq '^lib/(x86|x86_64|riscv64)/' "${APK_FILES}"; then
   echo "ERROR: unexpected non-ARM native ABI in final APK." >&2
   exit 1
 fi
-if grep -Eq '^lib/(armeabi-v7a|arm64-v8a)/libSDL3\.so$' "\${APK_FILES}"; then
+if grep -Eq '^lib/(armeabi-v7a|arm64-v8a)/libSDL3\.so$' "${APK_FILES}"; then
   echo "ERROR: SDL3 should be statically linked into libmain.so." >&2
   exit 1
 fi
-NATIVE_DIR="\${ROOT}/android/app/build/mm8-final-native"
-rm -rf "\${NATIVE_DIR}"
-mkdir -p "\${NATIVE_DIR}"
+NATIVE_DIR="${ROOT}/android/app/build/mm8-final-native"
+rm -rf "${NATIVE_DIR}"
+mkdir -p "${NATIVE_DIR}"
 for abi in armeabi-v7a arm64-v8a; do
-  mkdir -p "\${NATIVE_DIR}/\${abi}"
-  unzip -jo "\${APK}" "lib/\${abi}/*.so" -d "\${NATIVE_DIR}/\${abi}"
-  test -s "\${NATIVE_DIR}/\${abi}/libmain.so"
-  for lib in "\${NATIVE_DIR}/\${abi}"/*.so; do
-    header="$(readelf -h "\${lib}")"
-    if [[ "\${abi}" == "armeabi-v7a" ]]; then
-      grep -Eq 'Class:.*ELF32' <<< "\${header}"
-      grep -Eq 'Machine:.*ARM' <<< "\${header}"
+  mkdir -p "${NATIVE_DIR}/${abi}"
+  unzip -jo "${APK}" "lib/${abi}/*.so" -d "${NATIVE_DIR}/${abi}"
+  test -s "${NATIVE_DIR}/${abi}/libmain.so"
+  for lib in "${NATIVE_DIR}/${abi}"/*.so; do
+    header="$(readelf -h "${lib}")"
+    if [[ "${abi}" == "armeabi-v7a" ]]; then
+      grep -Eq 'Class:.*ELF32' <<< "${header}"
+      grep -Eq 'Machine:.*ARM' <<< "${header}"
     else
-      grep -Eq 'Class:.*ELF64' <<< "\${header}"
-      grep -Eq 'Machine:.*AArch64' <<< "\${header}"
+      grep -Eq 'Class:.*ELF64' <<< "${header}"
+      grep -Eq 'Machine:.*AArch64' <<< "${header}"
     fi
   done
-  readelf --dyn-syms -W "\${NATIVE_DIR}/\${abi}/libmain.so" | grep -E 'FUNC.*GLOBAL.*SDL_main'
-  readelf -d "\${NATIVE_DIR}/\${abi}/libmain.so" > "\${NATIVE_DIR}/\${abi}/dynamic.txt"
-  if grep -Fq 'libSDL3.so' "\${NATIVE_DIR}/\${abi}/dynamic.txt"; then
+  readelf --dyn-syms -W "${NATIVE_DIR}/${abi}/libmain.so" > "${NATIVE_DIR}/${abi}/dynsyms.txt"
+  grep -E 'FUNC.*GLOBAL.*SDL_main' "${NATIVE_DIR}/${abi}/dynsyms.txt"
+  readelf -d "${NATIVE_DIR}/${abi}/libmain.so" > "${NATIVE_DIR}/${abi}/dynamic.txt"
+  if grep -Fq 'libSDL3.so' "${NATIVE_DIR}/${abi}/dynamic.txt"; then
     echo "ERROR: libmain.so has an unexpected dynamic SDL3 dependency." >&2
     exit 1
   fi
@@ -129,8 +130,8 @@ grep -Fq "launchable-activity: name='com.psxrecomp.android.LauncherActivity'" "$
 
 REPORT="${ROOT}/android/app/build/mm8-final-build-report.txt"
 {
-  echo "Result: PASS — strict Mega Man 8 Android ARMv7 APK build."
-  echo "This report proves compilation/package validation, not physical-device gameplay."
+  echo "Result: PASS — strict Mega Man 8 Android universal ARMv7 + ARM64 APK build."
+  echo "This report proves compilation/package validation for both ARM ABIs, not physical-device gameplay."
   echo "APK: ${APK}"
   echo "APK SHA-256: ${APK_SHA256}"
   echo "Game source pin: $(git -C "${UPSTREAM}" rev-parse HEAD)"
@@ -144,10 +145,16 @@ REPORT="${ROOT}/android/app/build/mm8-final-build-report.txt"
   grep -E '^lib/(armeabi-v7a|arm64-v8a)/.*\.so$|^assets/bios/' "${ROOT}/android/app/build/mm8-final-apk-files.txt"
   echo
   echo "Exported SDL_main:"
-  grep -E 'FUNC.*GLOBAL.*SDL_main' "${ROOT}/android/app/build/mm8-final-dynsyms.txt"
+  for abi in armeabi-v7a arm64-v8a; do
+    echo "  ABI: ${abi}"
+    grep -E 'FUNC.*GLOBAL.*SDL_main' "${NATIVE_DIR}/${abi}/dynsyms.txt"
+  done
   echo
   echo "Native dynamic dependencies:"
-  cat "${ROOT}/android/app/build/mm8-final-dynamic.txt"
+  for abi in armeabi-v7a arm64-v8a; do
+    echo "  ABI: ${abi}"
+    cat "${NATIVE_DIR}/${abi}/dynamic.txt"
+  done
   if [[ -x "${BUILD_TOOLS}/aapt" ]]; then
     echo
     echo "Package and launcher:"
