@@ -36,10 +36,28 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null
 
-      - name: Fetch SDL3 source
+      # Gradle's dependency cache is managed by setup-gradle below.
+      # Cache SDL source and native CMake state to avoid a full rebuild on every push.
+      - name: Cache SDL3 source and native build state
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party/SDL
+            android/app/.cxx
+            android/app/build
+          key: ${{ runner.os }}-armv7-sdl3-3.2.16-${{ hashFiles('android/app/src/main/cpp/**', 'android/app/build.gradle', 'android/app/src/main/AndroidManifest.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-armv7-sdl3-3.2.16-
+
+      - name: Fetch SDL3 source if cache missed
         run: |
-          mkdir -p third_party
-          git clone --depth 1 --branch release-3.2.16 https://github.com/libsdl-org/SDL.git third_party/SDL
+          if [ ! -f third_party/SDL/CMakeLists.txt ]; then
+            rm -rf third_party/SDL
+            mkdir -p third_party
+            git clone --depth 1 --branch release-3.2.16 https://github.com/libsdl-org/SDL.git third_party/SDL
+          else
+            echo "Using cached SDL3 source"
+          fi
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
