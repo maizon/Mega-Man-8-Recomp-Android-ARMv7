@@ -38,7 +38,13 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null
 
-      # Gradle's dependency cache is managed by setup-gradle below.
+      # Set up Gradle before fetching SDL: SDL ships its own wrapper JAR,
+      # which is unrelated to this app and can fail setup-gradle's wrapper validation.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       # Cache SDL source and native CMake state to avoid a full rebuild on every push.
       - name: Cache SDL3 source and native build state
         uses: actions/cache@v4
@@ -59,11 +65,6 @@ jobs:
           else
             echo "Using cached SDL3 source"
           fi
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
 
       - name: Build debug APK for ARMv7
         run: gradle -p android --no-daemon --build-cache assembleDebug
