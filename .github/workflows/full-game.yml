@@ -23,7 +23,7 @@ env:
 jobs:
   full-game:
     name: Generate game code and build full ARMv7 APK
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
