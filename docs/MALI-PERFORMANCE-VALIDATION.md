@@ -24,3 +24,5 @@ Each texture is bound once per flush and unpack row length is set/reset once per
 - Do not move GL calls to a worker thread unless the context and synchronization design explicitly supports it.
 - Keep generated game code, disc images, and other proprietary game data out of commits and public artifacts.
 - CI packaging checks prove APK integrity and ABI inclusion only; they do not replace physical-device tests.
+
+The CI job also verifies that the preparation script applies this patch idempotently to the pinned framework before compiling either ABI.
