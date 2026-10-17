@@ -418,7 +418,7 @@ PYPRESET
 # synchronization. Converted RGBA rects and raw R16UI rects are independent
 # textures; upload them in two passes before any draw, preserving dirty rects,
 # command ordering, and exact VRAM contents.
-python3 - "\${UPSTREAM}/psxrecomp/runtime/src/gpu_gl_renderer.c" <<'PYUPLOAD'
+python3 - "${UPSTREAM}/psxrecomp/runtime/src/gpu_gl_renderer.c" <<'PYUPLOAD'
 from pathlib import Path
 import sys
 
