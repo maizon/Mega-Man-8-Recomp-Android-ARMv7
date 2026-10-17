@@ -1,0 +1,8 @@
+.gradle/
+**/build/
+local.properties
+.externalNativeBuild/
+.cxx/
+third_party/SDL/
+*.apk
+*.aab
