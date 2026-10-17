@@ -181,7 +181,7 @@ new_choices = r'''String[][] rchoices = {
             { "Vulkan (experimental)", "\"vulkan\"" }
         };'''
 if new_choices not in menu:
-    menu, count = re.subn(r'String\[\]\[\] rchoices = \{.*?\n        \};',
+    menu, count = re.subn(r'String\s*\[\s*\]\s*\[\s*\]\s*rchoices\s*=\s*(?:new\s+String\s*\[\s*\]\s*\[\s*\]\s*)?\{.*?\};',
                           lambda _: new_choices, menu, count=1, flags=re.S)
     if count != 1:
         raise SystemExit("ERROR: expected one renderer choice list")
