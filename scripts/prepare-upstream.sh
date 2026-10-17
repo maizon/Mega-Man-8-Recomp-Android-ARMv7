@@ -288,7 +288,7 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
 start_sig = "static int pp_draw("
-end_sig = "\\nint vk_renderer_present_vram("
+end_sig = "\nint vk_renderer_present_vram("
 if source.count(start_sig) != 1 or source.count(end_sig) != 1:
     raise SystemExit("ERROR: could not uniquely locate Vulkan present pass for viewport diagnostics")
 start = source.find(start_sig)
@@ -296,7 +296,7 @@ end = source.find(end_sig, start)
 if end <= start:
     raise SystemExit("ERROR: Vulkan present pass boundaries are out of order")
 block = source[start:end]
-old = "    p_vkCmdSetViewport(cb, 0, 1, &view);\\n    p_vkCmdSetScissor(cb, 0, 1, &sci);"
+old = "    p_vkCmdSetViewport(cb, 0, 1, &view);\n    p_vkCmdSetScissor(cb, 0, 1, &sci);"
 new = old + """
     static int s_present_diag_logged;
     if (!s_present_diag_logged) {
