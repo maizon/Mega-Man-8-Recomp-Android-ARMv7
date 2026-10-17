@@ -1,4 +1,4 @@
-# Mega Man 8 Recomp — Android ARMv7
+# Mega Man 8 Recomp — Android universal ARMv7 + ARM64
 
 Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), using the Android-enabled [PSXRecomp framework fork](https://github.com/dguillot-gh/psxrecomp-android).
 
@@ -6,7 +6,8 @@ Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92
 
 ## Target and pinned toolchain
 
-- Android ABI: `armeabi-v7a` (32-bit ARM), minimum API 26
+- Android ABIs: `armeabi-v7a` (32-bit ARM/NEON) + `arm64-v8a` (64-bit ARMv8), minimum API 26
+- One universal APK contains both native ABIs; Android selects the matching ABI at install time.
 - Java/JDK: 17; Gradle 8.9; Android Gradle Plugin 8.7.3
 - Android SDK platform 35; Build Tools 35.0.0
 - Android NDK 27.2.12479018; CMake 3.22.1; Ninja 1.11.1.3 (runtime smoke job)
@@ -17,7 +18,7 @@ Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92
 
 The workflow at [GitHub Actions](https://github.com/maizon/Mega-Man-8-Recomp-Android-ARMv7/actions) has two independent jobs:
 
-1. **android-shell** builds a debug APK without a disc image or generated game C, then checks ZIP integrity, zip alignment, development signature, package ID, min/target SDK, launcher activity, ARMv7 ELF headers, `SDL_main` export and native dependencies. It also runs a negative CMake test to prove strict mode rejects missing generated game/OpenBIOS inputs. The artifact is explicitly named `SHELL-debug`.
+1. **android-shell** builds a debug APK without a disc image or generated game C, then checks ZIP integrity, zip alignment, development signature, package ID, min/target SDK, launcher activity, ARMv7 and ARM64 ELF headers, `SDL_main` export and native dependencies. It also runs a negative CMake test to prove strict mode rejects missing generated game/OpenBIOS inputs. The artifact is explicitly named `SHELL-debug`.
 2. **android-runtime-smoke** compiles and links the real PSXRecomp runtime against SDL3 for ARMv7 without game-generated C. It publishes a separate `RUNTIME-SMOKE-NOT-GAME` library/report artifact. It is not an APK and not a playable game.
 
 Both jobs use a clean CMake/native build directory, fixed tool versions and pinned action commit SHAs. The shell job does not depend on the runtime job. The workflow supports push, pull request and manual `workflow_dispatch`.
