@@ -19,6 +19,10 @@ The upstream game repository's original `psxrecomp` gitlink points at a framewor
 - The real runtime target is compiled with `-O2` even in the debug APK to avoid the extreme slowdown of `-O0` for a CPU-bound static recompilation.
 - CMake rejects non-Android builds and non-`armeabi-v7a` ABIs for this app.
 
+## ARMv7-specific compatibility finding
+
+The first ARMv7 runtime smoke compile reached the MDEC SIMD source and exposed an AArch64-only intrinsic: `vaddvq_s32` is not available in the 32-bit ARM NEON header. The local preparation script now patches that reduction to sum the four NEON lanes on ARMv7 while preserving the horizontal-add intrinsic on AArch64. The next runtime smoke run must verify this correction and may expose additional compiler/linker issues.
+
 ## Generation requirements
 
 The game CMake consumes:

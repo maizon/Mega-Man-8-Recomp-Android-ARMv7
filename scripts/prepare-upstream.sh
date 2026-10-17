@@ -79,10 +79,40 @@ else:
     )
 PY
 
+# The pinned framework's NEON dot-product uses vaddvq_s32, an AArch64-only
+# intrinsic. ARMv7 NEON has no horizontal add intrinsic with that name, so use
+# an equivalent four-lane sum there while preserving the AArch64 fast path.
+python3 - "${UPSTREAM}/psxrecomp/runtime/src/mdec.c" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+old = "    return vaddvq_s32(vaddq_s32(lo, hi));"
+new = '''    int32x4_t sum = vaddq_s32(lo, hi);
+#if defined(__aarch64__)
+    return vaddvq_s32(sum);
+#else
+    return vgetq_lane_s32(sum, 0) + vgetq_lane_s32(sum, 1) +
+           vgetq_lane_s32(sum, 2) + vgetq_lane_s32(sum, 3);
+#endif'''
+
+if new in source:
+    print("ARMv7 MDEC NEON reduction already patched.")
+elif old in source:
+    path.write_text(source.replace(old, new, 1), encoding="utf-8")
+    print("Patched AArch64-only MDEC NEON reduction for ARMv7.")
+else:
+    raise SystemExit(
+        "ERROR: expected MDEC NEON reduction not found; refusing an unsafe automatic patch."
+    )
+PY
+
 test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
 test -s "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java"
 test -s "${UPSTREAM}/psxrecomp/bios/openbios.bin"
 test -s "${UPSTREAM}/psxrecomp/bios/OpenBIOS.LICENSE"
+grep -q 'vgetq_lane_s32(sum, 3)' "${UPSTREAM}/psxrecomp/runtime/src/mdec.c"
 
 actual_game="$(git -C "${UPSTREAM}" rev-parse HEAD)"
 actual_framework="$(git -C "${UPSTREAM}/psxrecomp" rev-parse HEAD)"
@@ -96,7 +126,7 @@ fi
 echo
 echo "Pinned game:      ${actual_game}"
 echo "Pinned framework: ${actual_framework}"
-echo "Android Java layer and OpenBIOS assets: present"
+echo "Android Java layer, OpenBIOS assets and ARMv7 NEON compatibility: present"
 echo "No disc image, retail BIOS dump, or generated game C was downloaded."
 echo "Next, generate from your own matching disc with:"
 echo "  bash scripts/generate-game.sh /path/to/your/Mega-Man-8.cue"
