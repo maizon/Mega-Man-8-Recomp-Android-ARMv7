@@ -8,7 +8,7 @@ def generatedGameAssets = layout.buildDirectory.dir('generated/psxGameAssets')
 def requireGameRuntime = project.hasProperty('MM8_REQUIRE_GAME_RUNTIME') &&
         project.property('MM8_REQUIRE_GAME_RUNTIME').toString().toBoolean()
 
-def cmakeArguments = ['-DANDROID_STL=c++_shared']
+def cmakeArguments = ['-DANDROID_STL=c++_shared', '-DANDROID_ARM_NEON=TRUE']
 if (requireGameRuntime) {
     cmakeArguments.add('-DMM8_REQUIRE_GAME_RUNTIME=ON')
 }
