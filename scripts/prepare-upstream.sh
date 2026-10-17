@@ -424,16 +424,19 @@ import sys
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
-start_anchor = "    /* Stage every rect's CPU data first (texture uploads outside the FBO"
-end_anchor = "    /* Quads into the hr FBO; two passes split by bit15"
-if source.count(start_anchor) != 1 or source.count(end_anchor) != 1:
-    raise SystemExit("ERROR: expected one CPU-upload staging block; refusing unsafe optimization.")
-start = source.index(start_anchor)
-end = source.index(end_anchor, start)
-old = source[start:end]
-if "GPU texture upload batching: upload converted rects first" in old:
+start_anchor = "    /* Stage every rect's CPU data first"
+end_anchor = "    /* Quads into the hr FBO;"
+if "GPU texture upload batching: upload converted rects first" in source:
     print("GPU texture upload batching already patched exactly once.")
 else:
+    if source.count(start_anchor) != 1 or source.count(end_anchor) != 1:
+        raise SystemExit(
+            "ERROR: expected one CPU-upload staging block; "
+            f"start={source.count(start_anchor)}, end={source.count(end_anchor)}; refusing unsafe optimization."
+        )
+    start = source.index(start_anchor)
+    end = source.index(end_anchor, start)
+    old = source[start:end]
     new = """    /* GPU texture upload batching: upload converted rects first.
      * The RGBA staging buffer is reused per rect, so those uploads remain in
      * this loop. The independent raw mirror can be uploaded in a second pass:
