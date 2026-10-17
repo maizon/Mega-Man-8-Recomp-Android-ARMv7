@@ -46,6 +46,13 @@ jobs:
           fi
           grep -Fq 'Usage:' <<< "$output"
 
+      - name: Install Vulkan shader compiler and headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslc libvulkan-dev
+          command -v glslc
+          test -s /usr/include/vulkan/vulkan.h
+
       - name: Set up Java 17
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
@@ -210,6 +217,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
+      - name: Install Vulkan shader compiler and headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslc libvulkan-dev
+          command -v glslc
+          test -s /usr/include/vulkan/vulkan.h
+
       - name: Set up Java 17 for Android SDK tools
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
@@ -262,6 +276,7 @@ jobs:
           set -euo pipefail
           CMAKE="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin/cmake"
           rm -rf build/android-runtime-smoke
+          CONFIG_LOG="${RUNNER_TEMP}/mm8-vulkan-configure.log"
           "${CMAKE}" -S tests/android-runtime-smoke -B build/android-runtime-smoke -G Ninja \
             -DCMAKE_MAKE_PROGRAM="$(command -v ninja)" \
             -DCMAKE_TOOLCHAIN_FILE="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}/build/cmake/android.toolchain.cmake" \
@@ -269,7 +284,11 @@ jobs:
             -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release \
             -DPSXRECOMP_ROOT="${GITHUB_WORKSPACE}/third_party/Mega-Man-8-Recomp/psxrecomp" \
-            -DSDL_ROOT="${GITHUB_WORKSPACE}/third_party/SDL"
+            -DSDL_ROOT="${GITHUB_WORKSPACE}/third_party/SDL" 2>&1 | tee "${CONFIG_LOG}"
+          if ! grep -Fq "Vulkan backend: headers" "${CONFIG_LOG}"; then
+            echo "Vulkan backend did not compile in; refusing to count a software-stub build as Vulkan validation." >&2
+            exit 1
+          fi
           "${CMAKE}" --build build/android-runtime-smoke --target psx-runtime --parallel 2 --verbose
 
           mapfile -t libs < <(find build/android-runtime-smoke -type f -name 'libmain.so' -print)

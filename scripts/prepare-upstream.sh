@@ -57,7 +57,7 @@ old = 'set(PSX_LAUNCHER ON CACHE BOOL "" FORCE)\nset(PSX_RECOMP_UI ON CACHE BOOL
 new = '''set(PSX_LAUNCHER ON CACHE BOOL "" FORCE)
 if(ANDROID)
     set(PSX_RECOMP_UI OFF CACHE BOOL "" FORCE)
-    set(PSX_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
+    set(PSX_ENABLE_VULKAN ON CACHE BOOL "" FORCE)
     set(PSX_REWIND OFF CACHE BOOL "" FORCE)
 else()
     set(PSX_RECOMP_UI ON CACHE BOOL "" FORCE)
@@ -158,6 +158,76 @@ else:
     path.write_text(patched, encoding="utf-8")
     print("Disabled the desktop OpenXR native-copy path on Android GLES.")
 
+PY
+
+# Mali-focused renderer controls: expose both hardware backends while preserving software fallback.
+python3 - "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxMenu.java" "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java" <<'PY'
+from pathlib import Path
+import sys
+
+menu_path, activity_path = map(Path, sys.argv[1:])
+menu = menu_path.read_text(encoding="utf-8")
+old_menu = r'''boolean gpu = "\"opengl\"".equals(video.get("renderer"));'''
+new_menu = r'''String renderer = video.getOrDefault("renderer", "\"software\"");'''
+if menu.count(new_menu) == 0:
+    if menu.count(old_menu) != 1:
+        raise SystemExit(f"ERROR: expected one renderer selection declaration; old={menu.count(old_menu)}, new={menu.count(new_menu)}")
+    menu = menu.replace(old_menu, new_menu, 1)
+
+old_choices = r'''String[][] rchoices = { { "Software", "\"software\"" }, { "GPU (experimental)", "\"opengl\"" } };'''
+new_choices = r'''String[][] rchoices = {
+            { "Software", "\"software\"" },
+            { "OpenGL ES", "\"opengl\"" },
+            { "Vulkan (experimental)", "\"vulkan\"" }
+        };'''
+if menu.count(new_choices) == 0:
+    if menu.count(old_choices) != 1:
+        raise SystemExit(f"ERROR: expected one two-backend renderer list; old={menu.count(old_choices)}, new={menu.count(new_choices)}")
+    menu = menu.replace(old_choices, new_choices, 1)
+
+old_selected = 'TextView b = chip(rchoices[i][0], (i == 1) == gpu);'
+new_selected = 'TextView b = chip(rchoices[i][0], renderer.equals(value));'
+if menu.count(new_selected) == 0:
+    if menu.count(old_selected) != 1:
+        raise SystemExit("ERROR: expected one GPU/software selected-state expression")
+    menu = menu.replace(old_selected, new_selected, 1)
+if "Vulkan (experimental)" not in menu or "vulkan" not in menu or 'renderer.equals(value)' not in menu:
+    raise SystemExit("ERROR: renderer menu failed post-patch validation")
+menu_path.write_text(menu, encoding="utf-8")
+
+activity = activity_path.read_text(encoding="utf-8")
+old_call = 'wantsGpu(toml) ? "opengl" : "software"'
+if old_call in activity:
+    activity = activity.replace(old_call, 'renderer(toml)')
+elif 'renderer(toml)' not in activity:
+    raise SystemExit("ERROR: expected renderer argument selection in PsxGameActivity")
+new_method = r'''private static String renderer(File toml) {
+        try {
+            String s = new String(java.nio.file.Files.readAllBytes(toml.toPath()),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("(?m)^\\s*renderer\\s*=\\s*\\\"(software|opengl|vulkan)\\\"")
+                    .matcher(s);
+            if (m.find()) return m.group(1);
+        } catch (java.io.IOException e) {
+            // Keep the known-safe software fallback if settings cannot be read.
+        }
+        return "software";
+    }'''
+if 'private static String renderer(File toml)' not in activity:
+    start_sig = "private static boolean wantsGpu(File toml) {"
+    end_sig = "\n    @Override\n    protected void onCreate(Bundle state) {"
+    if activity.count(start_sig) != 1 or activity.count(end_sig) != 1:
+        raise SystemExit("ERROR: expected unique renderer method boundaries")
+    start = activity.find(start_sig)
+    end = activity.find(end_sig, start)
+    if end <= start:
+        raise SystemExit("ERROR: renderer method boundaries are out of order")
+    activity = activity[:start] + new_method + "\n\n" + activity[end:]
+if 'wantsGpu(' in activity or activity.count('renderer(toml)') < 2:
+    raise SystemExit("ERROR: PsxGameActivity renderer parsing failed post-patch validation")
+activity_path.write_text(activity, encoding="utf-8")
+print("Enabled selectable Software/OpenGL ES/Vulkan renderer modes in the local Android framework.")
 PY
 
 test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
