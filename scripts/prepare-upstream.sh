@@ -278,6 +278,50 @@ else:
 PYVK
 
 
+
+# Log the actual present viewport/scissor once (not every frame) so a small
+# Vulkan image can be distinguished from a surface/swapchain extent problem.
+python3 - "${UPSTREAM}/psxrecomp/runtime/src/gpu_vk_renderer.c" <<'PYVP'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+start_sig = "static int pp_draw("
+end_sig = "\\nint vk_renderer_present_vram("
+if source.count(start_sig) != 1 or source.count(end_sig) != 1:
+    raise SystemExit("ERROR: could not uniquely locate Vulkan present pass for viewport diagnostics")
+start = source.find(start_sig)
+end = source.find(end_sig, start)
+if end <= start:
+    raise SystemExit("ERROR: Vulkan present pass boundaries are out of order")
+block = source[start:end]
+old = """    p_vkCmdSetViewport(cb, 0, 1, &view);
+    p_vkCmdSetScissor(cb, 0, 1, &sci);"""
+new = """    p_vkCmdSetViewport(cb, 0, 1, &view);
+    p_vkCmdSetScissor(cb, 0, 1, &sci);
+    static int s_present_diag_logged;
+    if (!s_present_diag_logged) {
+        s_present_diag_logged = 1;
+        fprintf(stdout,
+                "psxrecomp: Vulkan present diag swapExtent=%ux%u viewport=(%.0f,%.0f %.0fx%.0f) "
+                "scissor=(%d,%d %ux%u) dst=(%d,%d)-(%d,%d)\\n",
+                s_sc_extent.width, s_sc_extent.height,
+                view.x, view.y, view.width, view.height,
+                sci.offset.x, sci.offset.y, sci.extent.width, sci.extent.height,
+                dst[0].x, dst[0].y, dst[1].x, dst[1].y);
+    }"""
+if block.count(new) == 1:
+    print("Vulkan viewport/scissor diagnostics already patched.")
+elif block.count(old) == 1:
+    block = block.replace(old, new, 1)
+    source = source[:start] + block + source[end:]
+    path.write_text(source, encoding="utf-8")
+    print("Added one-time Vulkan viewport/scissor diagnostics.")
+else:
+    raise SystemExit(f"ERROR: expected one viewport/scissor pair in pp_draw; found {block.count(old)}")
+PYVP
+
 # Presets only touch keys that the pinned runtime already consumes. These are
 # not live performance switches: the menu already explains that video settings
 # apply after a game restart.
