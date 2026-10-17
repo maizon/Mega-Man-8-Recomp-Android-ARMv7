@@ -26,3 +26,5 @@ Each texture is bound once per flush and unpack row length is set/reset once per
 - CI packaging checks prove APK integrity and ABI inclusion only; they do not replace physical-device tests.
 
 The CI job also verifies that the preparation script applies this patch idempotently to the pinned framework before compiling either ABI.
+
+The build pipeline fails closed if the pinned renderer source no longer matches the exact upload-patch anchors.
