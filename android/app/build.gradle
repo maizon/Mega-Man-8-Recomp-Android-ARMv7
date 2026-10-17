@@ -1,0 +1,44 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.maizon.megaman8recomp'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.maizon.megaman8recomp'
+        minSdk 23
+        targetSdk 28
+        versionCode 1
+        versionName '0.1.0-dev'
+
+        ndk {
+            abiFilters 'armeabi-v7a'
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+                arguments '-DANDROID_STL=c++_shared'
+            }
+        }
+    }
+
+    sourceSets {
+        main.java.srcDirs += ['../../third_party/SDL/android-project/app/src/main/java']
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
