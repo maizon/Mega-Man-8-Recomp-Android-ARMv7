@@ -1,4 +1,4 @@
-name: Mega Man 8 Recomp — Full Game ARMv7
+name: Mega Man 8 Recomp — Full Game Universal ARMv7 + ARM64
 
 on:
   push:
@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: mm8-full-game-armv7
-  cancel-in-progress: false
+  group: mm8-full-game-universal
+  cancel-in-progress: true
 
 env:
   ANDROID_API: '35'
@@ -23,7 +23,7 @@ env:
 
 jobs:
   full-game:
-    name: Generate game code and build full ARMv7 APK
+    name: Generate game code and build full universal ARMv7 + ARM64 APK
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
