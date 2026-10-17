@@ -148,20 +148,20 @@ jobs:
           rm -rf /tmp/mm8-apk-native
           mkdir -p /tmp/mm8-apk-native
           for abi in armeabi-v7a arm64-v8a; do
-            abi_dir="/tmp/mm8-apk-native/\${abi}"
-            mkdir -p "\${abi_dir}"
-            unzip -jo "\${APK}" "lib/\${abi}/*.so" -d "\${abi_dir}"
-            readelf --dyn-syms -W "\${abi_dir}/libmain.so" | grep -E 'FUNC.*GLOBAL.*SDL_main'
-            readelf -d "\${abi_dir}/libmain.so" | grep -F 'Shared library: [libc++_shared.so]'
-            for lib in "\${abi_dir}"/*.so; do
-              echo "Validating \${lib}"
-              header="$(readelf -h "\${lib}")"
-              if [[ "\${abi}" == "armeabi-v7a" ]]; then
-                grep -Eq 'Class:.*ELF32' <<< "\${header}"
-                grep -Eq 'Machine:.*ARM' <<< "\${header}"
+            abi_dir="/tmp/mm8-apk-native/${abi}"
+            mkdir -p "${abi_dir}"
+            unzip -jo "${APK}" "lib/${abi}/*.so" -d "${abi_dir}"
+            readelf --dyn-syms -W "${abi_dir}/libmain.so" | grep -E 'FUNC.*GLOBAL.*SDL_main'
+            readelf -d "${abi_dir}/libmain.so" | grep -F 'Shared library: [libc++_shared.so]'
+            for lib in "${abi_dir}"/*.so; do
+              echo "Validating ${lib}"
+              header="$(readelf -h "${lib}")"
+              if [[ "${abi}" == "armeabi-v7a" ]]; then
+                grep -Eq 'Class:.*ELF32' <<< "${header}"
+                grep -Eq 'Machine:.*ARM' <<< "${header}"
               else
-                grep -Eq 'Class:.*ELF64' <<< "\${header}"
-                grep -Eq 'Machine:.*AArch64' <<< "\${header}"
+                grep -Eq 'Class:.*ELF64' <<< "${header}"
+                grep -Eq 'Machine:.*AArch64' <<< "${header}"
               fi
             done
           done
