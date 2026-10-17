@@ -2,53 +2,52 @@
 
 Date: 2026-10-17
 
-## Exact upstream pins
+## Exact upstream pins audited
 
-The current public Mega Man 8 Recomp repository's `main` tree points to:
+The public Mega Man 8 Recomp repository's audited `main` tree points to:
 
 - Game source: `omegakatana92/Mega-Man-8-Recomp`, commit `e9f808fa40c04592d1d95808c658c460c1c808d9`
 - `psxrecomp` submodule: `omegakatana92/psxrecomp`, commit `001ea94717874704a925b85be9739265e0d60477`
 - `recomp-ui` submodule: `mstan/recomp-ui`, commit `655d77d5858aa677f88e7b19cd70460773a17476`
+- SDL3 version required by the pinned PSXRecomp dependency manifest: `3.4.10`
 
-These are audit references, not yet vendored or pinned in this Android repository. Re-check the upstream tree before using them for a build.
+These are upstream audit references. The Android repository does not vendor the game checkout or its generated outputs.
 
-## Confirmed Android integration blockers
+## Corrected runtime finding
 
-### 1. The upstream runtime helper creates a desktop executable
+The pinned `psxrecomp/runtime/runtime.cmake` **does** contain an `if(ANDROID)` path that creates a shared runtime target and sets its output name to `main`. The earlier note that it only creates a desktop executable was incorrect; that claim has been corrected here.
 
-In the pinned PSXRecomp runtime helper, `psxrecomp_add_runtime_target(target)` creates the target with `add_executable(...)`. Android's SDL Java bridge in this repository expects a shared native library named `main`, loaded by SDLActivity, with the SDL entry-point contract. Simply including upstream `CMakeLists.txt` in the current Android CMake project will not produce the required Android library.
+The remaining integration work is not solved merely by calling the upstream CMake file. We must ensure that:
+- the Android app uses the same SDL3 version as the runtime (3.4.10);
+- SDL3 is built as a shared library for the SDL Android Java bridge;
+- the actual game and OpenBIOS generated C sources exist;
+- the upstream runtime's dependencies and UI compile with the Android NDK;
+- the final ARMv7 APK starts and can reach gameplay on a physical device.
 
-**Required engineering change:** introduce an explicit Android target path (or a carefully maintained local patch to the runtime target helper) that builds the runtime and generated game sources into the expected shared library and preserves SDLActivity's entry-point/lifecycle contract. Do not rename an executable target and assume this is solved.
+## Generated inputs required for the real game
 
-### 2. Desktop UI and platform dependencies are not optional by accident
+The upstream game CMake expects:
 
-The game's top-level CMake forces `PSX_LAUNCHER=ON` and `PSX_RECOMP_UI=ON`. The runtime helper includes desktop-oriented window, input, renderer, networking, and dependency logic. The Android target must explicitly disable or replace unsupported UI and host-only integrations; otherwise CMake may find desktop OpenGL or platform libraries inappropriate for Android.
-
-### 3. Generated game code is absent from this repository
-
-The upstream game CMake expects source files matching:
-
-- `generated/*_full.c` and `generated/*_full_*.c`
+- `generated/*_full.c` and/or `generated/*_full_*.c`
 - `generated/*_dispatch.c`
 - `bios-generated/OpenBIOS_full.c`
 - `bios-generated/OpenBIOS_dispatch.c`
 
-These outputs are not tracked in the upstream tree snapshot. The Android project must not silently report a game build success while these inputs are absent. The existing SDL3 shell build does not compile any of them.
+These outputs are not tracked in the public upstream tree snapshot. They must be generated locally through the upstream project using the user's own legally obtained game disc and required tooling. They must not be fabricated or silently omitted while calling the result playable.
 
-### 4. ARMv7 needs separate proof
+## Implementation added in this repository
 
-An Android/ARM64 build or a successful CMake configure is not evidence of 32-bit ARM support. Generated code and native dependencies must compile for `armeabi-v7a`; final APK inspection must verify ELF32 ARM libraries; runtime startup and gameplay must be tested on a physical 32-bit ARM device.
+The Android CMake file now has two explicit modes:
 
-## Safe implementation order
+1. **Real runtime mode:** if a local upstream checkout and all required generated game/OpenBIOS files are present, it builds SDL3 3.4.10 as a shared library, adds the upstream game CMake project, and checks that the runtime target outputs `libmain.so`.
+2. **Bring-up shell mode:** if those inputs are missing, it builds only the SDL shell and emits a prominent CMake warning. Set `MM8_REQUIRE_GAME_RUNTIME=ON` to make missing game inputs a hard configuration error instead of allowing the shell build.
 
-1. Keep the current shell APK as an infrastructure test only.
-2. Add a separate Android runtime target design instead of forcing the desktop executable target into the Android Gradle build.
-3. Pin upstream source/submodule revisions in the integration build.
-4. Disable or replace desktop-only UI/features explicitly and document each setting.
-5. Build the runtime with a small compile-only fixture before requiring game-generated C.
-6. Add a user-provided game-data workflow and generated source checks.
-7. Verify actual game startup and gameplay on ARMv7 hardware.
+This distinction is important: the CI shell APK is only a toolchain/ABI test, not a playable game.
+
+## ARMv7 verification requirements
+
+A successful Android/ARM64 build or successful CMake configure is not evidence of 32-bit ARM support. The generated game code and all native dependencies must compile for `armeabi-v7a`; APK inspection must verify ELF32 ARM libraries; startup, controls, audio/video, and gameplay must be tested on physical ARMv7 hardware.
 
 ## Truthful status
 
-The existing shell APK build is confirmed by GitHub Actions. The real PSXRecomp runtime is not yet integrated. This document deliberately does not claim a playable port or a 99% success probability.
+The existing shell APK build has succeeded in GitHub Actions. The real runtime path is now wired conditionally in CMake, but it has not yet been compiled with the real generated game sources and has not been runtime-tested. No 99.9% success claim is justified until those tests pass.
