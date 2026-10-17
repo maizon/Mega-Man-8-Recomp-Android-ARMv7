@@ -39,10 +39,10 @@ The real runtime requires these local files under `third_party/Mega-Man-8-Recomp
 
 Generate the missing outputs using the upstream project's supported workflow and your own legally obtained game disc. The exact generation requirements may depend on the game revision and upstream toolchain; do not create placeholder C files to bypass the checks. These files are ignored by Git and must not be committed or distributed.
 
-To force Gradle/CMake to reject the shell fallback when building locally, add this argument to the CMake arguments in `android/app/build.gradle`:
+Build in strict mode so Gradle/CMake refuses to fall back to the shell if the game inputs are missing:
 
-```gradle
-arguments '-DMM8_REQUIRE_GAME_RUNTIME=ON'
+```bash
+gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true assembleDebug
 ```
 
 When the real inputs exist, CMake builds SDL3 3.4.10 as a shared library, adds the upstream game project, and verifies that the runtime target's output name is `main` for SDLActivity. This integration path still requires a successful NDK build and real-device gameplay validation.
