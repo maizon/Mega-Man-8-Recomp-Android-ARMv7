@@ -215,9 +215,9 @@ settings_methods = r'''
         try {
             String source = new String(java.nio.file.Files.readAllBytes(config.toPath()),
                     java.nio.charset.StandardCharsets.UTF_8);
-            source = setVideoValue(source, "renderer", "\\"" + renderer + "\\"");
+            source = setVideoValue(source, "renderer", quote + renderer + quote);
             source = setVideoValue(source, "supersampling", scale);
-            source = setVideoValue(source, "aspect_ratio", "\\"" + aspect + "\\"");
+            source = setVideoValue(source, "aspect_ratio", quote + aspect + quote);
             source = setVideoValue(source, "antialiasing", aa);
             source = setVideoValue(source, "texture_filtering", filter);
             source = setVideoValue(source, "perspective_texturing", perspective);
