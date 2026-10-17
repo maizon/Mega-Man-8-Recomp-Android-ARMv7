@@ -296,10 +296,8 @@ end = source.find(end_sig, start)
 if end <= start:
     raise SystemExit("ERROR: Vulkan present pass boundaries are out of order")
 block = source[start:end]
-old = """    p_vkCmdSetViewport(cb, 0, 1, &view);
-    p_vkCmdSetScissor(cb, 0, 1, &sci);"""
-new = """    p_vkCmdSetViewport(cb, 0, 1, &view);
-    p_vkCmdSetScissor(cb, 0, 1, &sci);
+old = "    p_vkCmdSetViewport(cb, 0, 1, &view);\\n    p_vkCmdSetScissor(cb, 0, 1, &sci);"
+new = old + """
     static int s_present_diag_logged;
     if (!s_present_diag_logged) {
         s_present_diag_logged = 1;
