@@ -38,7 +38,7 @@ if(MM8_REQUIRE_GAME_RUNTIME AND NOT _mm8_real_runtime)
         "Run scripts/prepare-upstream.sh and scripts/generate-game.sh with your own matching legal disc before building.")
 endif()
 
-# Match the Android framework's tested packaging model: SDL is static inside
+# Match the Android framework's packaging model: SDL is static inside
 # libmain.so, so PsxGameActivity loads only 'main' and does not need libSDL3.so.
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
@@ -54,11 +54,10 @@ set(SDL_TRAY OFF CACHE BOOL "" FORCE)
 set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
 set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
 
-set(SDL_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../../third_party/SDL")
+get_filename_component(SDL_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../../third_party/SDL" ABSOLUTE)
 if(NOT EXISTS "${SDL_ROOT}/CMakeLists.txt")
     message(FATAL_ERROR "SDL3 3.4.10 source missing at ${SDL_ROOT}; run the documented setup/build workflow.")
 endif()
-add_subdirectory("${SDL_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/SDL3")
 
 if(_mm8_real_runtime)
     message(STATUS "Mega Man 8: configuring the real PSXRecomp Android runtime")
@@ -70,7 +69,13 @@ if(_mm8_real_runtime)
     set(PSX_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
     set(PSX_REWIND OFF CACHE BOOL "" FORCE)
     set(PSX_SDL_BACKEND "SDL3" CACHE STRING "" FORCE)
-    set(PSX_SDL3_FETCH OFF CACHE BOOL "" FORCE)
+    set(PSX_SDL3_FETCH ON CACHE BOOL "" FORCE)
+
+    # Let PSXRecomp's dependency resolver create SDL3 from this exact local
+    # source tree via FetchContent. Pre-adding SDL creates a non-imported target
+    # that the framework's standalone header probe cannot inspect correctly.
+    set(CMAKE_DISABLE_FIND_PACKAGE_SDL3 TRUE)
+    set(FETCHCONTENT_SOURCE_DIR_SDL3 "${SDL_ROOT}" CACHE PATH "" FORCE)
 
     add_subdirectory("${MM8_UPSTREAM_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/mm8-upstream")
 
@@ -105,6 +110,7 @@ else()
         "Building the SDL3 ARMv7 bring-up shell only, NOT the game. "
         "Use MM8_REQUIRE_GAME_RUNTIME=ON to reject this fallback.")
 
+    add_subdirectory("${SDL_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/SDL3")
     add_library(main SHARED main.cpp)
     target_compile_features(main PRIVATE cxx_std_17)
     target_compile_definitions(main PRIVATE SDL_MAIN_HANDLED)

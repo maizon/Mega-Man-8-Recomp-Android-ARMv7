@@ -32,12 +32,16 @@ set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
 set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
 
 set(PSX_SDL_BACKEND "SDL3" CACHE STRING "" FORCE)
-set(PSX_SDL3_FETCH OFF CACHE BOOL "" FORCE)
+set(PSX_SDL3_FETCH ON CACHE BOOL "" FORCE)
 set(PSX_RECOMP_UI OFF CACHE BOOL "" FORCE)
 set(PSX_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
 set(PSX_REWIND OFF CACHE BOOL "" FORCE)
 
-add_subdirectory("${SDL_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/SDL3")
+# Use the checked-out SDL source through PSXRecomp's FetchContent path. This
+# avoids a false-negative header probe against a local non-imported SDL target.
+set(CMAKE_DISABLE_FIND_PACKAGE_SDL3 TRUE)
+set(FETCHCONTENT_SOURCE_DIR_SDL3 "${SDL_ROOT}" CACHE PATH "" FORCE)
+
 include("${PSXRECOMP_ROOT}/runtime/runtime.cmake")
 
 # Compile and link the actual PSXRecomp runtime for ARMv7 without game code.
