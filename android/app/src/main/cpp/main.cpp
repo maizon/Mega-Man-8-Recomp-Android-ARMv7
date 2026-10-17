@@ -1,14 +1,9 @@
+#include <jni.h>
 #include <SDL3/SDL.h>
 #include <android/log.h>
 
 #define LOG_TAG "MM8RecompAndroid"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
-
-extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
-    (void)vm;
-    (void)reserved;
-    return JNI_VERSION_1_6;
-}
 
 int SDL_main(int argc, char **argv) {
     (void)argc;
