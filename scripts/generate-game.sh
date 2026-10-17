@@ -32,6 +32,30 @@ fi
 
 python3 "${ROOT}/scripts/validate-cue.py" "${DISC}" "${UPSTREAM}/game.toml"
 
+# Android performance defaults: use the real GPU renderer and native internal
+# resolution for frame-rate headroom. The 16:9 projection hack is enabled at
+# generation time; per-title visual coverage still requires device testing.
+python3 - "${UPSTREAM}/game.toml" <<'PYCFG'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = '[video]\nrenderer = "software"'
+new = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\noffer_vulkan = false'
+already = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\noffer_vulkan = false'
+if text.count(already) == 1:
+    print("Android video defaults already applied: OpenGL, 16:9, native internal scale, Vulkan hidden.")
+elif text.count(old) == 1:
+    text = text.replace(old, new, 1)
+    path.write_text(text, encoding="utf-8")
+    print("Applied Android video defaults: OpenGL, 16:9, native internal scale, Vulkan hidden.")
+else:
+    raise SystemExit(
+        f"ERROR: expected exactly one known [video] block (original={text.count(old)}, tuned={text.count(already)}); refusing unsafe config edit."
+    )
+PYCFG
+
 echo "Generating local Mega Man 8 sources from the validated disc."
 echo "The disc and generated copyrighted game sources stay local; this script does not upload or commit them."
 python3 "${UPSTREAM}/psxrecomp/psxrecomp_cli.py" generate \
