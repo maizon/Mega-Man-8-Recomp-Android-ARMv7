@@ -23,7 +23,7 @@ env:
 
 jobs:
   android-shell:
-    name: Build and validate ARMv7 SHELL APK (no game data)
+    name: Build and validate universal ARMv7/ARM64 SHELL APK (no game data)
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -133,9 +133,11 @@ jobs:
 
           unzip -Z1 "${APK}" > /tmp/mm8-apk-files.txt
           grep -Fxq 'lib/armeabi-v7a/libmain.so' /tmp/mm8-apk-files.txt
+          grep -Fxq 'lib/arm64-v8a/libmain.so' /tmp/mm8-apk-files.txt
           grep -Fxq 'lib/armeabi-v7a/libc++_shared.so' /tmp/mm8-apk-files.txt
-          if grep -Eq '^lib/(arm64-v8a|x86|x86_64|riscv64)/' /tmp/mm8-apk-files.txt; then
-            echo "Unexpected native ABI found in ARMv7-only APK" >&2
+          grep -Fxq 'lib/arm64-v8a/libc++_shared.so' /tmp/mm8-apk-files.txt
+          if grep -Eq '^lib/(x86|x86_64|riscv64)/' /tmp/mm8-apk-files.txt; then
+            echo "Unexpected non-ARM ABI found in universal APK" >&2
             exit 1
           fi
           if grep -Fq 'lib/armeabi-v7a/libSDL3.so' /tmp/mm8-apk-files.txt; then
