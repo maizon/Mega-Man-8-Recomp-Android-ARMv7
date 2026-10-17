@@ -28,13 +28,13 @@ set(SDL_RENDER ON CACHE BOOL "" FORCE)
 set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
 set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
 set(SDL_TRAY OFF CACHE BOOL "" FORCE)
-set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+set(SDL_VULKAN ON CACHE BOOL "" FORCE)
 set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
 
 set(PSX_SDL_BACKEND "SDL3" CACHE STRING "" FORCE)
 set(PSX_SDL3_FETCH ON CACHE BOOL "" FORCE)
 set(PSX_RECOMP_UI OFF CACHE BOOL "" FORCE)
-set(PSX_ENABLE_VULKAN OFF CACHE BOOL "" FORCE)
+set(PSX_ENABLE_VULKAN ON CACHE BOOL "" FORCE)
 set(PSX_REWIND OFF CACHE BOOL "" FORCE)
 
 # Use the checked-out SDL source through PSXRecomp's FetchContent path. This
@@ -51,7 +51,7 @@ psxrecomp_add_runtime_target(psx-runtime
     WINDOW_TITLE "Mega Man 8 Android ARMv7 runtime smoke"
     DEFAULT_GAME_CONFIG_PATH "game.toml"
 )
-target_compile_options(psx-runtime PRIVATE -O2)
+target_compile_options(psx-runtime PRIVATE -O3)
 
 get_target_property(_output_name psx-runtime OUTPUT_NAME)
 if(NOT _output_name STREQUAL "main")
