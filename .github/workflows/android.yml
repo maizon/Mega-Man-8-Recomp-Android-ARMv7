@@ -217,6 +217,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
+      - name: Install Vulkan shader compiler and headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glslc libvulkan-dev
+          command -v glslc
+          test -s /usr/include/vulkan/vulkan.h
+
       - name: Set up Java 17 for Android SDK tools
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
