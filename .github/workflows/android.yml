@@ -44,7 +44,6 @@ jobs:
           path: |
             third_party/SDL
             android/app/.cxx
-            android/app/build
           key: ${{ runner.os }}-armv7-sdl3-3.2.16-${{ hashFiles('android/app/src/main/cpp/**', 'android/app/build.gradle', 'android/app/src/main/AndroidManifest.xml') }}
           restore-keys: |
             ${{ runner.os }}-armv7-sdl3-3.2.16-
@@ -65,7 +64,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build debug APK for ARMv7
-        run: gradle -p android --no-daemon assembleDebug
+        run: gradle -p android --no-daemon --build-cache assembleDebug
 
       - name: Verify APK exists
         run: |
