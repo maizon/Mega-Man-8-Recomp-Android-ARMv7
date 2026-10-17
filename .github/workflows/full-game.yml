@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          private="$(curl -fsSL https://api.github.com/repos/${GITHUB_REPOSITORY} | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("private", False)).lower())')"
+          private="$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${GITHUB_REPOSITORY} | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("private", False)).lower())')"
           if [[ "$private" != "true" ]]; then
             echo "::error::This workflow produces a game-derived APK. Make this repository private before running it, so the artifact is not publicly accessible."
             exit 1
