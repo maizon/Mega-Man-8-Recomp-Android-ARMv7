@@ -17,14 +17,21 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def digest_file(path: Path) -> tuple[str, str]:
+def digest_file(path: Path) -> tuple[str, str, str]:
     sha1 = hashlib.sha1()
     md5 = hashlib.md5(usedforsecurity=False)
+    sha256 = hashlib.sha256()
     with path.open("rb") as stream:
         while chunk := stream.read(1024 * 1024):
             sha1.update(chunk)
             md5.update(chunk)
-    return sha1.hexdigest(), md5.hexdigest()
+            sha256.update(chunk)
+    return sha1.hexdigest(), md5.hexdigest(), sha256.hexdigest()
+
+# Exact SHA-256 of the user's published PT-BR patched disc image. This narrow
+# allowlist preserves a strong content identity check; it does not disable
+# validation for arbitrary modified or unknown images.
+PTBR_PATCHED_DISC_SHA256 = "86a68a2782208f820cf217e89b3cdd8cf8ec688af7060ebc4eef9ef106c04728"
 
 
 def main() -> None:
@@ -83,12 +90,19 @@ def main() -> None:
     actual_size = track_01_file.stat().st_size
     if actual_size != expected_size:
         fail("TRACK 01 size does not match the pinned Mega Man 8 USA game.toml")
-    actual_sha1, actual_md5 = digest_file(track_01_file)
+    actual_sha1, actual_md5, actual_sha256 = digest_file(track_01_file)
     if actual_sha1 != expected_sha1 or actual_md5 != expected_md5:
-        fail("TRACK 01 hashes do not match the pinned Mega Man 8 USA game.toml; use the matching legal disc dump")
+        if actual_sha256 != PTBR_PATCHED_DISC_SHA256:
+            fail(
+                "TRACK 01 hashes do not match the pinned Mega Man 8 USA game.toml, "
+                "and SHA-256 is not the explicitly recognized PT-BR patched image"
+            )
+        print("NOTICE: standard USA track hashes differ, but exact SHA-256 matches the recognized PT-BR patched disc image.")
+        print("The image will be tested by the upstream generator; this does not guarantee executable compatibility.")
+    else:
+        print("Disc identity passed: Mega Man 8 USA / SLUS-00453 track-01 size, SHA-1 and MD5 match.")
 
     print("Cue validation passed: all referenced tracks exist.")
-    print("Disc identity passed: Mega Man 8 USA / SLUS-00453 track-01 size, SHA-1 and MD5 match.")
 
 
 if __name__ == "__main__":
