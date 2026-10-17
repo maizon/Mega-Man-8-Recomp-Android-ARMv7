@@ -34,6 +34,16 @@ gradle -p android --no-daemon --no-build-cache clean assembleDebug
 
 The CI uses the exact SDL commit listed above and verifies it after checkout. `prepare-upstream.sh` pins the game/framework sources and applies validated Android-only patches to the ignored `third_party/Mega-Man-8-Recomp/` checkout. It does not download a disc image or generated game C.
 
+## One-command full-game Android build (requires the user's own legal disc)
+
+Run the build driver to prepare pinned public sources, validate the matching disc, generate game code locally, compile in strict mode, and verify the final ARMv7 APK. It refuses to silently fall back to the shell and keeps generated copyrighted sources local.
+
+```bash
+bash scripts/build-full-android.sh "/path/to/your/Mega Man 8 (USA).cue"
+```
+
+The script expects Java 17, Git, Python 3, Gradle 8.9, and an Android SDK/NDK configured in the environment. It verifies the game/framework/SDL source pins, strict-mode result, APK signature, package metadata, ARMv7 ELF headers and exported `SDL_main`, then writes a SHA-256 build report under `android/app/build/mm8-final-build-report.txt`. It still does not prove physical-device gameplay.
+
 ## Prepare the full game build (requires the user's own legal disc)
 
 The pinned game configuration targets **Mega Man 8 USA, product ID SLUS-00453**. The generator script first verifies that every file referenced by the supplied `.cue` exists and that track 01's size, SHA-1 and MD5 match the identity values in the pinned upstream `game.toml`.

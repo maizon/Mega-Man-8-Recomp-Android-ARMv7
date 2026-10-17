@@ -30,6 +30,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
+      - name: Validate full-game build driver without game data
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/build-full-android.sh
+          set +e
+          output="$(bash scripts/build-full-android.sh 2>&1)"
+          status=$?
+          set -e
+          if [[ "$status" -ne 2 ]]; then
+            echo "Expected usage exit code 2 without a disc argument, got $status" >&2
+            echo "$output" >&2
+            exit 1
+          fi
+          grep -Fq 'Usage:' <<< "$output"
+
       - name: Set up Java 17
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
