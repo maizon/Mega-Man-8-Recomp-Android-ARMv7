@@ -5,7 +5,7 @@
 #define LOG_TAG "MM8RecompAndroid"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 
-int SDL_main(int argc, char **argv) {
+extern "C" int SDL_main(int argc, char **argv) {
     (void)argc;
     (void)argv;
 
