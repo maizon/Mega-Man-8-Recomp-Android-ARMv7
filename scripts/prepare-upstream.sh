@@ -277,6 +277,97 @@ else:
     raise SystemExit(f"Expected one preTransform assignment, found {source.count(old_transform)}")
 PYVK
 
+
+# Presets only touch keys that the pinned runtime already consumes. These are
+# not live performance switches: the menu already explains that video settings
+# apply after a game restart.
+python3 - "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxMenu.java" <<'PYPRESET'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+anchor = '''        toggle(list, "Smooth textures", "Bilinear filtering instead of blocky pixels.",
+                "\\\"bilinear\\\"".equals(video.get("texture_filtering")),
+                on -> setVideo("texture_filtering", on ? "\\\"bilinear\\\"" : "\\\"nearest\\\""));'''
+insert = anchor + '''
+        section(list, "Performance presets");
+        list.addView(label("Presets", "Choose a real combination of supported video settings. Restart the game to apply."));
+        LinearLayout presets = new LinearLayout(activity);
+        String[][] presetChoices = {
+            { "Max FPS", "max" }, { "Performance", "performance" },
+            { "Balanced", "balanced" }, { "Quality", "quality" }
+        };
+        for (int i = 0; i < presetChoices.length; i++) {
+            final String preset = presetChoices[i][1];
+            TextView b = chip(presetChoices[i][0], false);
+            b.setOnClickListener(v -> applyPreset(preset));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, px(44), 1);
+            lp.setMargins(i == 0 ? 0 : px(5), px(6), 0, px(4));
+            presets.addView(b, lp);
+        }
+        list.addView(presets);'''
+if "Performance presets" not in source:
+    if source.count(anchor) != 1:
+        raise SystemExit(f"Expected one texture-filter toggle anchor; found {source.count(anchor)}")
+    source = source.replace(anchor, insert, 1)
+
+method_anchor = '''    /** Set one [video] key (raw TOML value), keeping every other line as it was. */
+    private void setVideo(String key, String value) {'''
+method = '''    /** Apply a preset using only settings understood by the pinned runtime. */
+    private void applyPreset(String preset) {
+        switch (preset) {
+            case "max":
+                setVideo("renderer", "\\\"opengl\\\"");
+                setVideo("supersampling", "1");
+                setVideo("antialiasing", "false");
+                setVideo("texture_filtering", "\\\"nearest\\\"");
+                setVideo("perspective_texturing", "false");
+                setVideo("aspect_ratio", "\\\"16:9\\\"");
+                break;
+            case "performance":
+                setVideo("renderer", "\\\"opengl\\\"");
+                setVideo("supersampling", "1");
+                setVideo("antialiasing", "false");
+                setVideo("texture_filtering", "\\\"nearest\\\"");
+                setVideo("perspective_texturing", "false");
+                setVideo("aspect_ratio", "\\\"4:3\\\"");
+                break;
+            case "balanced":
+                setVideo("renderer", "\\\"opengl\\\"");
+                setVideo("supersampling", "1");
+                setVideo("antialiasing", "false");
+                setVideo("texture_filtering", "\\\"bilinear\\\"");
+                setVideo("perspective_texturing", "true");
+                setVideo("aspect_ratio", "\\\"16:9\\\"");
+                break;
+            case "quality":
+                setVideo("renderer", "\\\"opengl\\\"");
+                setVideo("supersampling", "2");
+                setVideo("antialiasing", "true");
+                setVideo("texture_filtering", "\\\"bilinear\\\"");
+                setVideo("perspective_texturing", "true");
+                setVideo("aspect_ratio", "\\\"4:3\\\"");
+                break;
+            default:
+                return;
+        }
+        android.widget.Toast.makeText(activity, "Preset saved. Restart the game to apply.",
+                android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+''' + method_anchor
+if "private void applyPreset(String preset)" not in source:
+    if source.count(method_anchor) != 1:
+        raise SystemExit(f"Expected one setVideo method anchor; found {source.count(method_anchor)}")
+    source = source.replace(method_anchor, method, 1)
+
+if "Performance presets" not in source or "private void applyPreset(String preset)" not in source:
+    raise SystemExit("Preset menu post-validation failed")
+path.write_text(source, encoding="utf-8")
+print("Added four presets built only from existing [video] runtime keys.")
+PYPRESET
+
 test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
 test -s "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java"
 test -s "${UPSTREAM}/psxrecomp/bios/openbios.bin"
