@@ -80,6 +80,25 @@ if(_mm8_real_runtime)
     if(NOT TARGET psx-runtime)
         message(FATAL_ERROR "Upstream CMake did not create the expected psx-runtime target")
     endif()
+
+    # SDL3's Android Activity calls the exported SDL_main symbol. The pinned
+    # recomp-ui helper adds SDL_MAIN_HANDLED to the entire runtime target, which
+    # suppresses SDL_main.h's Android main->SDL_main mapping. Remove that one
+    # target definition after the helper has run, allowing SDL3 3.4.10's Android
+    # header to export SDL_main. Keep all other launcher/UI definitions intact.
+    get_target_property(_mm8_runtime_definitions psx-runtime COMPILE_DEFINITIONS)
+    if(_mm8_runtime_definitions)
+        list(REMOVE_ITEM _mm8_runtime_definitions "SDL_MAIN_HANDLED")
+        set_property(TARGET psx-runtime PROPERTY COMPILE_DEFINITIONS
+            "${_mm8_runtime_definitions}")
+    endif()
+    get_target_property(_mm8_runtime_definitions_after psx-runtime COMPILE_DEFINITIONS)
+    if(_mm8_runtime_definitions_after AND
+       "SDL_MAIN_HANDLED" IN_LIST _mm8_runtime_definitions_after)
+        message(FATAL_ERROR
+            "SDL_MAIN_HANDLED remains on psx-runtime; Android SDL_main export would be suppressed")
+    endif()
+
     get_target_property(_mm8_output_name psx-runtime OUTPUT_NAME)
     if(NOT _mm8_output_name STREQUAL "main")
         message(FATAL_ERROR
