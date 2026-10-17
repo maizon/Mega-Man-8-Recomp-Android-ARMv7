@@ -167,30 +167,31 @@ import sys
 
 menu_path, activity_path = map(Path, sys.argv[1:])
 menu = menu_path.read_text(encoding="utf-8")
-old_menu = r'''boolean gpu = "\"opengl\"".equals(video.get("renderer"));'''
-new_menu = r'''String renderer = video.getOrDefault("renderer", "\"software\"");'''
-if menu.count(new_menu) == 0:
-    if menu.count(old_menu) != 1:
-        raise SystemExit(f"ERROR: expected one renderer selection declaration; old={menu.count(old_menu)}, new={menu.count(new_menu)}")
-    menu = menu.replace(old_menu, new_menu, 1)
+new_menu = r'''String renderer = video.getOrDefault("renderer", "\"opengl\"");'''
+if new_menu not in menu:
+    menu, count = re.subn(
+        r'(?m)^[ \t]*(?:boolean gpu[ \t]*=.*?;|String renderer[ \t]*=.*?;)[ \t]*$',
+        new_menu, menu, count=1)
+    if count != 1:
+        raise SystemExit("ERROR: expected one renderer selection declaration")
 
-old_choices = r'''String[][] rchoices = { { "Software", "\"software\"" }, { "GPU (experimental)", "\"opengl\"" } };'''
 new_choices = r'''String[][] rchoices = {
-            { "Software", "\"software\"" },
-            { "OpenGL ES", "\"opengl\"" },
+            { "OpenGL ES (recommended)", "\"opengl\"" },
             { "Vulkan (experimental)", "\"vulkan\"" }
         };'''
-if menu.count(new_choices) == 0:
-    if menu.count(old_choices) != 1:
-        raise SystemExit(f"ERROR: expected one two-backend renderer list; old={menu.count(old_choices)}, new={menu.count(new_choices)}")
-    menu = menu.replace(old_choices, new_choices, 1)
+if new_choices not in menu:
+    menu, count = re.subn(r'String\[\]\[\] rchoices = \{.*?\n        \};',
+                          lambda _: new_choices, menu, count=1, flags=re.S)
+    if count != 1:
+        raise SystemExit("ERROR: expected one renderer choice list")
 
-old_selected = 'TextView b = chip(rchoices[i][0], (i == 1) == gpu);'
 new_selected = 'TextView b = chip(rchoices[i][0], renderer.equals(value));'
-if menu.count(new_selected) == 0:
-    if menu.count(old_selected) != 1:
-        raise SystemExit("ERROR: expected one GPU/software selected-state expression")
-    menu = menu.replace(old_selected, new_selected, 1)
+if new_selected not in menu:
+    menu, count = re.subn(
+        r'TextView b = chip\(rchoices\[i\]\[0\],[^;]*\);',
+        lambda _: new_selected, menu, count=1)
+    if count != 1:
+        raise SystemExit("ERROR: expected one renderer selected-state expression")
 if "Vulkan (experimental)" not in menu or "vulkan" not in menu or 'renderer.equals(value)' not in menu:
     raise SystemExit("ERROR: renderer menu failed post-patch validation")
 menu_path.write_text(menu, encoding="utf-8")
@@ -237,6 +238,7 @@ PY
 # swapchains without spamming per-frame logs.
 python3 - "${UPSTREAM}/psxrecomp/runtime/src/gpu_vk_renderer.c" <<'PYVK'
 from pathlib import Path
+import re
 import sys
 
 path = Path(sys.argv[1])
