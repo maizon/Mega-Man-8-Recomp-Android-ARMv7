@@ -20,24 +20,30 @@ Pushes and pull requests run the Android workflow in **Actions**. When a build s
 
 Unless the real upstream checkout and generated inputs are present, this APK is only an SDL/Android/ARMv7 bring-up shell. It does not run Mega Man 8.
 
-## Prepare the upstream checkout
+## Prepare and generate the real game
 
-On a machine with Git installed, from the repository root run:
+First clone the audited upstream project and initialize its submodules:
 
 ```bash
 bash scripts/prepare-upstream.sh
 ```
 
-This pins the public game repository to the audited commit and initializes its submodules. It does **not** create generated game code and does not fetch a game disc or BIOS dump.
+Then, on a machine with the full legal multi-track disc dump, pass its `.cue` file to the generation script:
 
-The real runtime requires these local files under `third_party/Mega-Man-8-Recomp/`:
+```bash
+bash scripts/generate-game.sh "/path/to/your/Mega Man 8 (USA).cue"
+```
+
+This calls the upstream `psxrecomp_cli.py generate` workflow, which prepares the disc, builds/locates the emitters, generates OpenBIOS, and emits the game C code. The disc and generated sources remain local; the script does not upload them.
+
+The generated files are expected under `third_party/Mega-Man-8-Recomp/`:
 
 - `generated/*_full.c` and/or `generated/*_full_*.c`
 - `generated/*_dispatch.c`
 - `bios-generated/OpenBIOS_full.c`
 - `bios-generated/OpenBIOS_dispatch.c`
 
-Generate the missing outputs using the upstream project's supported workflow and your own legally obtained game disc. The exact generation requirements may depend on the game revision and upstream toolchain; do not create placeholder C files to bypass the checks. These files are ignored by Git and must not be committed or distributed.
+The generation script validates these outputs and stops if any required files are missing. Do not create placeholder C files to bypass the checks. Generated game code and disc images are ignored by Git and must not be committed or distributed.
 
 Build in strict mode so Gradle/CMake refuses to fall back to the shell if the game inputs are missing:
 
