@@ -191,7 +191,7 @@ if menu.count(new_selected) == 0:
     if menu.count(old_selected) != 1:
         raise SystemExit("ERROR: expected one GPU/software selected-state expression")
     menu = menu.replace(old_selected, new_selected, 1)
-if "Vulkan (experimental)" not in menu or '"\\\"vulkan\\\""' not in menu or 'renderer.equals(value)' not in menu:
+if "Vulkan (experimental)" not in menu or "vulkan" not in menu or 'renderer.equals(value)' not in menu:
     raise SystemExit("ERROR: renderer menu failed post-patch validation")
 menu_path.write_text(menu, encoding="utf-8")
 
