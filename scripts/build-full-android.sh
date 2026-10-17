@@ -76,7 +76,8 @@ if grep -Eq '^lib/(x86|x86_64|riscv64)/' "${APK_FILES}"; then
   echo "ERROR: unexpected non-ARM native ABI in final APK." >&2
   exit 1
 fi
-if grep -Eq '^lib/(armeabi-v7a|arm64-v8a)/libSDL3[.]so  echo "ERROR: SDL3 should be statically linked into libmain.so." >&2
+if grep -Eq "^lib/(armeabi-v7a|arm64-v8a)/libSDL3[.]so$" "$APK_FILES"; then
+  echo "ERROR: SDL3 should be statically linked into libmain.so." >&2
   exit 1
 fi
 NATIVE_DIR="${ROOT}/android/app/build/mm8-final-native"
