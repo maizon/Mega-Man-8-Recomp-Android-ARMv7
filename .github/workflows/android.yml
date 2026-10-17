@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: mm8-android-armv7-${{ github.ref }}
-  cancel-in-progress: false
+  group: mm8-android-universal-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   ANDROID_API: '35'
