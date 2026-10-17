@@ -413,6 +413,78 @@ path.write_text(source, encoding="utf-8")
 print("Added four presets built only from existing [video] runtime keys.")
 PYPRESET
 
+
+# Reduce redundant GL texture binds and pixel-store changes in CPU->GPU VRAM
+# synchronization. Converted RGBA rects and raw R16UI rects are independent
+# textures; upload them in two passes before any draw, preserving dirty rects,
+# command ordering, and exact VRAM contents.
+python3 - "\${UPSTREAM}/psxrecomp/runtime/src/gpu_gl_renderer.c" <<'PYUPLOAD'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+start_anchor = "    /* Stage every rect's CPU data first (texture uploads outside the FBO"
+end_anchor = "    /* Quads into the hr FBO; two passes split by bit15"
+if source.count(start_anchor) != 1 or source.count(end_anchor) != 1:
+    raise SystemExit("ERROR: expected one CPU-upload staging block; refusing unsafe optimization.")
+start = source.index(start_anchor)
+end = source.index(end_anchor, start)
+old = source[start:end]
+if "GPU texture upload batching: upload converted rects first" in old:
+    print("GPU texture upload batching already patched exactly once.")
+else:
+    new = """    /* GPU texture upload batching: upload converted rects first.
+     * The RGBA staging buffer is reused per rect, so those uploads remain in
+     * this loop. The independent raw mirror can be uploaded in a second pass:
+     * no draw or CPU VRAM mutation occurs between the passes. Binding each
+     * texture once and setting unpack row length once removes redundant driver
+     * state changes without merging dirty rects or changing PS1 command order. */
+    glBindTexture(GL_TEXTURE_2D, s_up_tex);
+    glPixelStorei(PSXGL_UNPACK_ROW_LENGTH, 0);
+    for (int i = 0; i < nrects; i++) {
+        int x = rects[i].x0, y = rects[i].y0;
+        int w = rects[i].x1 - rects[i].x0 + 1;
+        int h = rects[i].y1 - rects[i].y0 + 1;
+        if (diag) s_rt_up_diag[2] += (uint64_t)w * (uint64_t)h;
+        coh_record(GL_COH_FLUSH, x, y, x + w - 1, y + h - 1);
+
+        /* RGBA8 staging for the hr quad draw. */
+        uint64_t t0 = diag ? SDL_GetPerformanceCounter() : 0;
+        for (int row = 0; row < h; row++) {
+            const uint16_t *src = s_vram + (size_t)(y + row) * VRAM_W + x;
+            uint32_t *dst = s_conv + (size_t)row * w;
+            for (int col = 0; col < w; col++) dst[col] = conv_1555_to_rgba8(src[col]);
+        }
+        if (diag) s_rt_up_diag[3] += SDL_GetPerformanceCounter() - t0;
+        t0 = diag ? SDL_GetPerformanceCounter() : 0;
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, s_conv);
+        if (diag) s_rt_up_diag[4] += SDL_GetPerformanceCounter() - t0;
+    }
+
+    /* Raw mirror takes CPU data directly. All rects use the VRAM row stride. */
+    glBindTexture(GL_TEXTURE_2D, s_raw_tex);
+    glPixelStorei(PSXGL_UNPACK_ROW_LENGTH, VRAM_W);
+    for (int i = 0; i < nrects; i++) {
+        int x = rects[i].x0, y = rects[i].y0;
+        int w = rects[i].x1 - rects[i].x0 + 1;
+        int h = rects[i].y1 - rects[i].y0 + 1;
+        uint64_t t0 = diag ? SDL_GetPerformanceCounter() : 0;
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h,
+                        PSXGL_RED_INTEGER, GL_UNSIGNED_SHORT,
+                        s_vram + (size_t)y * VRAM_W + x);
+        if (diag) s_rt_up_diag[4] += SDL_GetPerformanceCounter() - t0;
+    }
+    glPixelStorei(PSXGL_UNPACK_ROW_LENGTH, 0);
+
+"""
+    source = source[:start] + new + source[end:]
+    if source.count("GPU texture upload batching: upload converted rects first") != 1:
+        raise SystemExit("ERROR: optimized upload block post-validation failed.")
+    path.write_text(source, encoding="utf-8")
+    print("Optimized CPU->GPU VRAM uploads: batched texture binds and pixel-store state.")
+PYUPLOAD
+
 python3 "${ROOT}/scripts/patch-android-ui.py"
 
 test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
