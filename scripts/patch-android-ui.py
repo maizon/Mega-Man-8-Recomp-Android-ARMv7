@@ -44,44 +44,16 @@ write(template, source)
 # Never select the software renderer from Android. OpenGL is the default; Vulkan is optional.
 activity_path = android / "PsxGameActivity.java"
 activity = read(activity_path)
-activity = activity.replace('wantsGpu(toml) ? "opengl" : "software"', 'renderer(toml)')
-method_start = activity.find("private static String renderer(File toml) {")
-if method_start < 0:
-    method_start = activity.find("private static boolean wantsGpu(File toml) {")
-if method_start < 0:
-    raise SystemExit("ERROR: PsxGameActivity renderer method anchor not found")
-method_end = activity.find("    @Override\n    protected void onCreate(Bundle state) {", method_start)
-if method_end < 0:
-    raise SystemExit("ERROR: PsxGameActivity renderer method end not found")
-renderer_method = r'''private static String renderer(File toml) {
-        try {
-            String s = new String(java.nio.file.Files.readAllBytes(toml.toPath()),
-                    java.nio.charset.StandardCharsets.UTF_8);
-            java.util.regex.Matcher m = java.util.regex.Pattern
-                    .compile("(?m)^\\s*renderer\\s*=\\s*\\\"(opengl|vulkan)\\\"")
-                    .matcher(s);
-            if (m.find()) return m.group(1);
-        } catch (java.io.IOException e) {
-            // OpenGL ES is the reliable default; software rendering is intentionally not selectable.
-        }
-        return "opengl";
-    }
-
-'''
-activity = activity[:method_start] + renderer_method + activity[method_end:]
-activity = activity.replace(
-    'software unless the menu\\'s Renderer choice wrote\\n        // [video] renderer = "opengl" into files/game.toml (OpenGL ES, experimental).',
-    'OpenGL ES by default; the settings menu can optionally select Vulkan.'
-)
 write(activity_path, activity)
 
 # Remove the software choice from the in-game settings too.
 menu_path = android / "PsxMenu.java"
 menu = read(menu_path)
 menu = menu.replace('video.getOrDefault("renderer", "\\"software\\"")', 'video.getOrDefault("renderer", "\\"opengl\\"")')
+old_renderer_label = """list.addView(label("Renderer", "GPU draws on the phone's graphics chip: higher resolutions cost "
+                + "much less. Experimental; switch back to Software if anything looks wrong."));"""
 menu = replace_once(
-    menu,
-    'list.addView(label("Renderer", "GPU draws on the phone\\'s graphics chip: higher resolutions cost "\n                + "much less. Experimental; switch back to Software if anything looks wrong."));',
+    menu, old_renderer_label,
     'list.addView(label("Renderer", "OpenGL ES is the default for Mali GPUs. Vulkan is experimental and may not work on every device."));',
     "renderer help",
 )
@@ -236,7 +208,7 @@ settings_methods = r'''
         String aspect = prefs.getString("aspect_ratio", "16:9");
         if (!"4:3".equals(aspect)) aspect = "16:9";
         String aa = "true".equals(prefs.getString("antialiasing", "false")) ? "true" : "false";
-        String filter = "bilinear".equals(prefs.getString("texture_filtering", "nearest")) ? "\\"bilinear\\"" : "\\"nearest\\"";
+        String filter = "bilinear".equals(prefs.getString("texture_filtering", "nearest")) ? "\"bilinear\"" : "\"nearest\"";
         String perspective = "true".equals(prefs.getString("perspective_texturing", "false")) ? "true" : "false";
         try {
             String source = new String(java.nio.file.Files.readAllBytes(config.toPath()),
@@ -254,20 +226,20 @@ settings_methods = r'''
     }
 
     private static String setVideoValue(String source, String key, String value) {
-        Pattern section = Pattern.compile("(?ms)(^\\\\[video\\\\][ \\\\t]*\\\\R)(.*?)(?=^\\\\[[^\\\\r\\\\n]+\\\\][ \\\\t]*$|\\\\z)");
+        Pattern section = Pattern.compile("(?ms)(^\\[video\\][ \\t]*\\R)(.*?)(?=^\\[[^\\r\\n]+\\][ \\t]*$|\\z)");
         Matcher sectionMatch = section.matcher(source);
         if (!sectionMatch.find()) {
-            String separator = source.endsWith("\\n") ? "" : "\\n";
-            return source + separator + "\\n[video]\\n" + key + " = " + value + "\\n";
+            String separator = source.endsWith("\n") ? "" : "\n";
+            return source + separator + "\n[video]\n" + key + " = " + value + "\n";
         }
         String body = sectionMatch.group(2);
-        Pattern keyLine = Pattern.compile("(?m)^[ \\\\t]*" + Pattern.quote(key) + "[ \\\\t]*=.*$");
+        Pattern keyLine = Pattern.compile("(?m)^[ \\t]*" + Pattern.quote(key) + "[ \\t]*=.*$");
         Matcher keyMatch = keyLine.matcher(body);
         if (keyMatch.find()) {
             body = keyMatch.replaceFirst(Matcher.quoteReplacement(key + " = " + value));
         } else {
-            if (!body.isEmpty() && !body.endsWith("\\n")) body += "\\n";
-            body += key + " = " + value + "\\n";
+            if (!body.isEmpty() && !body.endsWith("\n")) body += "\n";
+            body += key + " = " + value + "\n";
         }
         return source.substring(0, sectionMatch.start(2)) + body + source.substring(sectionMatch.end(2));
     }
@@ -287,7 +259,7 @@ launcher = replace_once(
     '            PsxFiles.writeText(new File(files, "game.toml"),\n                    fillDiscs(PsxFiles.readAsset(this, "game.toml.in"), discs));\n            applySettingsToGameToml();\n',
     "apply settings after game import",
 )
-if 'Credits ao Maizon' not in launcher or 'showSettings()' not in launcher or 'https://www.instagram.com/maicon_nasciment0/' not in launcher:
+if 'Créditos ao Maizon' not in launcher or 'showSettings()' not in launcher or 'https://www.instagram.com/maicon_nasciment0/' not in launcher:
     raise SystemExit("ERROR: launcher feature validation failed")
 write(launcher_path, launcher)
 print("Android UI patches applied: first-screen settings, OpenGL default, no software option, Maizon credits and Instagram.")
