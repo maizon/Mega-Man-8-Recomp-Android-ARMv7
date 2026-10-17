@@ -12,6 +12,7 @@ if(NOT EXISTS "${PSXRECOMP_ROOT}/runtime/runtime.cmake")
 endif()
 if(NOT EXISTS "${SDL_ROOT}/CMakeLists.txt")
     message(FATAL_ERROR "SDL_ROOT must point at SDL3 3.4.10 source.")
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)

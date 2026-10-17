@@ -16,6 +16,7 @@ if (requireGameRuntime) {
 android {
     namespace 'com.maizon.megaman8recomp'
     compileSdk 35
+    ndkVersion '27.2.12479018'
 
     defaultConfig {
         applicationId 'com.maizon.megaman8recomp'

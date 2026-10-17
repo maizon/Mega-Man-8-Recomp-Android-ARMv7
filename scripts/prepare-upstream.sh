@@ -30,7 +30,16 @@ if [[ -d "${UPSTREAM}/psxrecomp/.git" || -f "${UPSTREAM}/psxrecomp/.git" ]]; the
   git -C "${UPSTREAM}/psxrecomp" fetch origin "${FRAMEWORK_COMMIT}"
   git -C "${UPSTREAM}/psxrecomp" checkout --detach "${FRAMEWORK_COMMIT}"
 else
-  rm -rf "${UPSTREAM}/psxrecomp"
+  # Only remove an empty, uninitialized submodule directory. Never erase an
+  # unexpected directory that might contain local work or generated inputs.
+  if [[ -L "${UPSTREAM}/psxrecomp" || -e "${UPSTREAM}/psxrecomp" ]]; then
+    if [[ ! -d "${UPSTREAM}/psxrecomp" ]] ||
+       [[ -n "$(find "${UPSTREAM}/psxrecomp" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+      echo "ERROR: ${UPSTREAM}/psxrecomp exists without Git metadata and is not empty; refusing to delete it." >&2
+      exit 1
+    fi
+    rmdir "${UPSTREAM}/psxrecomp"
+  fi
   git clone --branch android --single-branch "${FRAMEWORK_URL}" "${UPSTREAM}/psxrecomp"
   git -C "${UPSTREAM}/psxrecomp" checkout --detach "${FRAMEWORK_COMMIT}"
 fi
