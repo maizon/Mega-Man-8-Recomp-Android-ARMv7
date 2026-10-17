@@ -24,23 +24,17 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
-    env:
-      MM8_GAME_DATA_TOKEN: ${{ secrets.MM8_GAME_DATA_TOKEN }}
     steps:
-      - name: Require private target repository and read-only game-data token
+      - name: Require private target repository
         shell: bash
         run: |
           set -euo pipefail
           private="$(curl -fsSL -H "Authorization: Bearer ${{ github.token }}" -H "Accept: application/vnd.github+json" https://api.github.com/repos/${GITHUB_REPOSITORY} | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("private", False)).lower())')"
           if [[ "$private" != "true" ]]; then
-            echo "::error::This workflow produces a game-derived APK. Make this repository private before running it, so the artifact is not publicly accessible."
+            echo "::error::This workflow produces a game-derived APK. Keep this repository private so the artifact is not publicly accessible."
             exit 1
           fi
-          if [[ -z "${MM8_GAME_DATA_TOKEN}" ]]; then
-            echo "::error::Add repository secret MM8_GAME_DATA_TOKEN with read-only Contents access to maizon/mm8-game-data."
-            exit 1
-          fi
-          echo "Privacy gate passed; credential is present (value not displayed)."
+          echo "Privacy gate passed."
 
       - name: Checkout port source
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
@@ -75,7 +69,7 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Resolve and download private BIN/CUE assets from release tag
+      - name: Resolve and download public BIN/CUE assets from release tag
         shell: bash
         run: |
           set -euo pipefail
@@ -83,12 +77,9 @@ jobs:
           DISC_DIR="${RUNNER_TEMP}/mm8-disc"
           mkdir -p "${DISC_DIR}"
           RELEASE_JSON="${RUNNER_TEMP}/mm8-release.json"
-          trap 'unset MM8_GAME_DATA_TOKEN' EXIT
-
-          # Resolve the release and asset IDs at runtime instead of relying on stale IDs.
+          # The release is public; do not use a possibly stale token that can cause 404.
           STATUS="$(curl --silent --show-error --location \
             --output "${RELEASE_JSON}" --write-out '%{http_code}' \
-            -H "Authorization: Bearer ${MM8_GAME_DATA_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/maizon/mm8-game-data/releases/tags/Rom")"
@@ -110,8 +101,8 @@ jobs:
               return found[0]
           bin_asset, cue_asset = select(".bin"), select(".cue")
           with open(sys.argv[2], "w", encoding="utf-8") as f:
-              f.write(f"BIN_ID={bin_asset['id']}\n")
-              f.write(f"CUE_ID={cue_asset['id']}\n")
+              f.write(f"BIN_URL={bin_asset['browser_download_url']}\n")
+              f.write(f"CUE_URL={cue_asset['browser_download_url']}\n")
               f.write(f"BIN_NAME={bin_asset['name']}\n")
               f.write(f"CUE_NAME={cue_asset['name']}\n")
               f.write(f"BIN_SIZE={bin_asset['size']}\n")
@@ -121,21 +112,18 @@ jobs:
           source "${RUNNER_TEMP}/mm8-assets.env"
 
           download_asset() {
-            local asset_id="$1" output="$2" label="$3"
+            local asset_url="$1" output="$2" label="$3"
             local status
             status="$(curl --silent --show-error --location \
               --output "$output" --write-out '%{http_code}' \
-              -H "Authorization: Bearer ${MM8_GAME_DATA_TOKEN}" \
-              -H "Accept: application/octet-stream" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/maizon/mm8-game-data/releases/assets/${asset_id}")"
+              "$asset_url")"
             if [[ "$status" != "200" ]]; then
-              echo "::error::Download of ${label} asset failed (HTTP ${status}); check token access and release asset state."
+              echo "::error::Download of public ${label} asset failed (HTTP ${status}); check the release asset URL/state."
               exit 1
             fi
           }
-          download_asset "${BIN_ID}" "${DISC_DIR}/Mega.Man.8.bin" BIN
-          download_asset "${CUE_ID}" "${DISC_DIR}/Mega.Man.8.cue" CUE
+          download_asset "${BIN_URL}" "${DISC_DIR}/Mega.Man.8.bin" BIN
+          download_asset "${CUE_URL}" "${DISC_DIR}/Mega.Man.8.cue" CUE
 
           test "$(stat -c %s "${DISC_DIR}/Mega.Man.8.bin")" = "424493664"
           test "$(stat -c %s "${DISC_DIR}/Mega.Man.8.cue")" = "233"
