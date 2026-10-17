@@ -1,65 +1,39 @@
-# Upstream audit — 2026-10-17
+# Upstream and Android build audit — 2026-10-17
 
-## Source project
+## Repositories and revisions
 
-Repository: https://github.com/omegakatana92/Mega-Man-8-Recomp
+- Game: [omegakatana92/Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), pinned at `e9f808fa40c04592d1d95808c658c460c1c808d9`.
+- Android-enabled PSXRecomp framework: [dguillot-gh/psxrecomp-android](https://github.com/dguillot-gh/psxrecomp-android), pinned at `58e9fd9cffc582b5e3d4d2357d6a05bba7c1c69a`.
+- SDL3 3.4.10, pinned at `8e37db5e797b6167f3a00d697d816a684bd259c7`.
+- Android integration reference: [dguillot-gh/psx-android](https://github.com/dguillot-gh/psx-android).
 
-The current upstream root CMake file:
+## Proven build results before the next workflow revision
 
-- Requires CMake 3.20 and C11/C++17.
-- Sets `PSXRECOMP_ROOT` to the `psxrecomp` submodule.
-- Forces `PSX_LAUNCHER=ON` and `PSX_RECOMP_UI=ON`.
-- Includes `psxrecomp/runtime/runtime.cmake`.
-- Collects generated game C files from `generated/*_full*.c` and `generated/*_dispatch.c`.
-- Adds generated OpenBIOS C files from `bios-generated/`.
-- Calls `psxrecomp_add_runtime_target(...)`.
-- Adds `NOMINMAX` and `WIN32_LEAN_AND_MEAN` compile definitions, which must be reviewed for non-Windows builds.
+Run #36 (commit `c23bb19`) passed the ARMv7 runtime smoke link and shell APK build. The smoke output was an ELF32 ARM `libmain.so` with a global `SDL_main` symbol. The APK contained `libmain.so` and `libc++_shared.so`, both ELF32/ARM. It was uploaded as a debug artifact. The workflow did not test on a physical device.
 
-The upstream `.gitmodules` declares:
-- `psxrecomp` → https://github.com/omegakatana92/psxrecomp.git
-- `recomp-ui` → https://github.com/mstan/recomp-ui.git
+Run #35 failed at the final runtime shared-library link after compiling 404/405 objects; #36 passed after the source fixes. The full game was not compiled because no game-generated C files were available.
 
-The game configuration identifies the target as Mega Man 8 USA, product ID `SLUS-00453`, and uses generated recompilation output. The project README says it is playable on its original supported desktop environment, but that is not proof of Android compatibility.
+## Android integration choices
 
-## Android reference
+- ABI: `armeabi-v7a`, minSdk 26, targetSdk 28.
+- Java 17, Gradle 8.9, Android Gradle Plugin 8.7.3.
+- SDK platform 35, Build Tools 35.0.0, NDK 27.2.12479018, CMake 3.22.1.
+- SDL3 static in `libmain.so`; the shell activity extends SDLActivity and loads only `main`.
+- Runtime smoke compiles and links the actual PSXRecomp framework without game-generated C. It is intentionally not represented as a playable game.
 
-The CTR Native Android project documents SDL3, the `armeabi-v7a` ABI, touchscreen/gamepad input, and user-supplied game assets. We use these as architectural reference points only; the PSXRecomp runtime still needs its own Android adaptation.
+## Framework-specific findings
 
-## Current state in this repository
+The Android framework has an Android shared-library path that outputs `libmain.so`. Its Java layer provides a launcher/activity and touch/gamepad controls. The desktop-oriented `recomp-ui`, Vulkan and rewind paths are disabled for the initial Android build. The project keeps these settings local to the ignored upstream checkout instead of changing the public upstream repository.
 
-The initial commits establish a Gradle/NDK/CMake project, fetch SDL3 in CI, target `armeabi-v7a`, and upload a debug APK artifact. The native entry point is only an SDL3 bring-up shell.
+ARMv7-specific fixes are applied to the pinned framework:
+- MDEC reduction: AArch64-only `vaddvq_s32` replaced with an ARMv7 four-lane sum under a platform guard.
+- OpenXR native-copy: desktop `glReadBuffer` implementation excluded from Android GLES; desktop behavior remains under the non-Android branch.
+The preparation script requires one known source block and verifies the result rather than applying ambiguous global substitutions.
 
-**Not yet implemented:** PSXRecomp runtime linkage, generated Mega Man 8 sources, game launch/configuration, touch controls, game-specific asset picker, graphics/audio parity, and device gameplay tests.
+## Strict game path
 
-## Required next audit before runtime integration
+The game configuration identifies Mega Man 8 USA as product ID `SLUS-00453`. The full build requires generated game full/dispatch C and generated OpenBIOS full/dispatch C at the paths consumed by the upstream CMake. The validation script checks the cue's referenced files and the exact track-01 identity configured upstream. Generated sources remain local and ignored.
 
-1. Pin and inspect the exact `psxrecomp` and `recomp-ui` revisions referenced by upstream.
-2. Trace the target creation function in `runtime/runtime.cmake` and identify desktop-only source files, compiler flags, dependencies, and platform guards.
-3. Determine whether launcher/UI can be disabled or replaced cleanly for Android.
-4. Configure SDL3 and all runtime dependencies for Android NDK/ARMv7.
-5. Compile generated C sources in manageable CI steps and fix ARMv7/Android-specific assumptions.
-6. Add a user-provided disc image/config flow without redistributing game content.
-7. Verify the produced APK starts on a real ARMv7 device before claiming gameplay support.
+## Next validation
 
-
-## CTR Native Android architecture review (additional findings)
-
-Reviewed the reference repository's Android Gradle module, manifest, custom Activity, root CMake and Android README.
-
-Useful patterns to adapt:
-- Keep SDL3's Android Java bridge in the app source set from the SDL source tree.
-- Build the native entry point as a shared library named `main` for the stock SDLActivity loader, and load SDL3 before the app library.
-- Link Android platform libraries explicitly; enable OpenGL ES for Android and disable unnecessary SDL subsystems/tests/examples for the port.
-- Restrict the Android ABI explicitly. This project intentionally starts with `armeabi-v7a` only, unlike CTR Native's two ABI configuration.
-- Use an SDLActivity subclass when game-specific Java behavior (such as file selection and lifecycle integration) is required.
-
-Important differences:
-- CTR Native has its own decompiled CTR game source and `platform/native_*` compatibility layer. That layer is not a PSXRecomp runtime and cannot be copied as the Mega Man 8 engine.
-- Mega Man 8 Recomp relies on PSXRecomp's runtime, generated C, BIOS HLE/OpenBIOS configuration, and disc/game configuration. Those must be integrated and tested separately.
-- CTR's source includes its own memory model and PS1 facade; these assumptions do not automatically match PSXRecomp's runtime contracts.
-
-## Build-cache review
-
-GitHub Actions now caches the SDL3 checkout and Android CMake state (`.cxx`), while `gradle/actions/setup-gradle` manages Gradle dependency/build caches. Gradle is invoked with `--build-cache`. The APK output directory is deliberately not cached, preventing an old APK from being mistaken for the current build output. Cache keys include the host OS, target ABI, SDL version, and relevant Android/CMake source inputs.
-
-This improves repeat-build performance but does not remove the need to download SDK/NDK packages on fresh hosted runners. It also does not prove a successful build; the workflow run must be checked after each CI change.
+The updated GitHub Actions workflow splits shell and runtime smoke into independent jobs. The shell job validates APK archive/signature/metadata/ABI/ELF/symbol/dependencies and verifies that strict mode fails closed when game-generated inputs are absent before upload. The runtime job validates the framework shared library and exports a separate non-game artifact. Both results must be checked after the workflow runs. Full-game compilation and device gameplay remain separate milestones.

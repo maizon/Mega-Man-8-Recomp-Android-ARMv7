@@ -21,17 +21,14 @@ git -C "${UPSTREAM}" remote set-url origin "${GAME_URL}"
 git -C "${UPSTREAM}" fetch origin "${GAME_COMMIT}"
 git -C "${UPSTREAM}" checkout --detach "${GAME_COMMIT}"
 
-# The game's original psxrecomp gitlink is not Android-ready. Pin the audited
-# Android runtime fork in that local submodule path; no framework code is copied
-# into this repository and no game data is downloaded.
+# The original framework gitlink is not Android-ready. Pin the audited Android
+# fork locally; no framework source or game data is copied into this repository.
 if [[ -d "${UPSTREAM}/psxrecomp/.git" || -f "${UPSTREAM}/psxrecomp/.git" ]]; then
   git -C "${UPSTREAM}/psxrecomp" remote set-url origin "${FRAMEWORK_URL}"
   git -C "${UPSTREAM}/psxrecomp" fetch origin android
   git -C "${UPSTREAM}/psxrecomp" fetch origin "${FRAMEWORK_COMMIT}"
   git -C "${UPSTREAM}/psxrecomp" checkout --detach "${FRAMEWORK_COMMIT}"
 else
-  # Only remove an empty, uninitialized submodule directory. Never erase an
-  # unexpected directory that might contain local work or generated inputs.
   if [[ -L "${UPSTREAM}/psxrecomp" || -e "${UPSTREAM}/psxrecomp" ]]; then
     if [[ ! -d "${UPSTREAM}/psxrecomp" ]] ||
        [[ -n "$(find "${UPSTREAM}/psxrecomp" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
@@ -46,12 +43,10 @@ fi
 
 git -C "${UPSTREAM}/psxrecomp" submodule sync --recursive
 git -C "${UPSTREAM}/psxrecomp" submodule update --init --recursive
-# Keep the upstream UI submodule available for desktop-side inspection, even
-# though the Android CMake patch below disables its desktop launcher target.
 git -C "${UPSTREAM}" submodule update --init recomp-ui
 
-# Patch only the local ignored checkout. The Android app has its own Java start
-# menu and touch pad, so it must not compile the desktop recomp-ui launcher.
+# All source patches are local to this ignored checkout. Each patch requires
+# one exact upstream match (or one exact already-patched match); ambiguity fails.
 python3 - "${UPSTREAM}/CMakeLists.txt" <<'PY'
 from pathlib import Path
 import sys
@@ -68,20 +63,21 @@ else()
     set(PSX_RECOMP_UI ON CACHE BOOL "" FORCE)
 endif()'''
 
-if new in source:
-    print("Android CMake options already patched.")
-elif old in source:
-    path.write_text(source.replace(old, new, 1), encoding="utf-8")
+if source.count(new) == 1:
+    print("Android CMake options already patched exactly once.")
+elif source.count(old) == 1:
+    patched = source.replace(old, new, 1)
+    if patched.count(new) != 1 or patched.count(old) != 0:
+        raise SystemExit("ERROR: Android CMake option patch did not validate.")
+    path.write_text(patched, encoding="utf-8")
     print("Patched Android CMake options in the local upstream checkout.")
 else:
     raise SystemExit(
-        "ERROR: upstream CMake layout changed; refusing an unsafe automatic patch."
+        f"ERROR: expected exactly one known CMake block; old={source.count(old)}, patched={source.count(new)}. Refusing an unsafe patch."
     )
 PY
 
-# The pinned framework's NEON dot-product uses vaddvq_s32, an AArch64-only
-# intrinsic. ARMv7 NEON has no horizontal add intrinsic with that name, so use
-# an equivalent four-lane sum there while preserving the AArch64 fast path.
+# vaddvq_s32 is AArch64-only; ARMv7 NEON sums the same four lanes explicitly.
 python3 - "${UPSTREAM}/psxrecomp/runtime/src/mdec.c" <<'PY'
 from pathlib import Path
 import sys
@@ -97,35 +93,44 @@ new = '''    int32x4_t sum = vaddq_s32(lo, hi);
            vgetq_lane_s32(sum, 2) + vgetq_lane_s32(sum, 3);
 #endif'''
 
-if new in source:
-    print("ARMv7 MDEC NEON reduction already patched.")
-elif old in source:
-    path.write_text(source.replace(old, new, 1), encoding="utf-8")
+if source.count(new) == 1:
+    print("ARMv7 MDEC NEON reduction already patched exactly once.")
+elif source.count(old) == 1:
+    patched = source.replace(old, new, 1)
+    if patched.count(new) != 1 or patched.count(old) != 0:
+        raise SystemExit("ERROR: ARMv7 NEON patch did not validate.")
+    path.write_text(patched, encoding="utf-8")
     print("Patched AArch64-only MDEC NEON reduction for ARMv7.")
 else:
     raise SystemExit(
-        "ERROR: expected MDEC NEON reduction not found; refusing an unsafe automatic patch."
+        f"ERROR: expected exactly one known MDEC reduction; old={source.count(old)}, patched={source.count(new)}. Refusing an unsafe patch."
     )
 PY
 
-# OpenXR's desktop back-buffer copier calls glReadBuffer, which is not exported
-# by Android GLESv2. OpenXR is disabled for this Android baseline, so keep the
-# function signature but compile its desktop implementation out on Android.
+# Android GLESv2 lacks desktop glReadBuffer. OpenXR is disabled for this target.
 python3 - "${UPSTREAM}/psxrecomp/runtime/src/gpu_gl_renderer.c" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
 source = path.read_text(encoding="utf-8")
-start = source.find("static int openxr_copy_native(")
-end = source.find("\nstatic void openxr_present_native", start)
-if start < 0 or end < 0:
-    raise SystemExit("ERROR: OpenXR native-copy function layout changed; refusing an unsafe patch.")
-
+start_signature = "static int openxr_copy_native("
+end_signature = "\nstatic void openxr_present_native(void) {"
+if source.count(start_signature) != 1 or source.count(end_signature) != 1:
+    raise SystemExit(
+        "ERROR: expected exactly one OpenXR native-copy function and following present function; refusing an unsafe patch."
+    )
+start = source.find(start_signature)
+end = source.find(end_signature, start)
 block = source[start:end]
-if "#if defined(__ANDROID__)" in block and "return 0;" in block:
-    print("Android OpenXR native-copy guard already patched.")
+
+if "#if defined(__ANDROID__)" in block:
+    if block.count("#if defined(__ANDROID__)") != 1 or "glReadBuffer" not in block:
+        raise SystemExit("ERROR: existing Android OpenXR guard is ambiguous or incomplete.")
+    print("Android OpenXR GLES guard already present exactly once.")
 else:
+    if "glReadBuffer" not in block:
+        raise SystemExit("ERROR: expected desktop glReadBuffer call not found in native-copy function.")
     brace = block.find("{")
     close = block.rfind("}")
     if brace < 0 or close < brace:
@@ -144,7 +149,13 @@ else:
 #endif
 }
 '''
-    path.write_text(source[:start] + replacement + source[end:], encoding="utf-8")
+    patched = source[:start] + replacement + source[end:]
+    patched_start = patched.find(start_signature)
+    patched_end = patched.find(end_signature, patched_start)
+    patched_block = patched[patched_start:patched_end]
+    if patched_block.count("#if defined(__ANDROID__)") != 1 or "glReadBuffer" not in patched_block:
+        raise SystemExit("ERROR: OpenXR Android guard failed post-patch validation.")
+    path.write_text(patched, encoding="utf-8")
     print("Disabled the desktop OpenXR native-copy path on Android GLES.")
 
 PY
@@ -153,8 +164,8 @@ test -s "${UPSTREAM}/psxrecomp/runtime/runtime.cmake"
 test -s "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java"
 test -s "${UPSTREAM}/psxrecomp/bios/openbios.bin"
 test -s "${UPSTREAM}/psxrecomp/bios/OpenBIOS.LICENSE"
-grep -q 'vgetq_lane_s32(sum, 3)' "${UPSTREAM}/psxrecomp/runtime/src/mdec.c"
-grep -q '#if defined(__ANDROID__)' "${UPSTREAM}/psxrecomp/runtime/src/gpu_gl_renderer.c"
+grep -Fq 'vgetq_lane_s32(sum, 3)' "${UPSTREAM}/psxrecomp/runtime/src/mdec.c"
+grep -Fq '#if defined(__ANDROID__)' "${UPSTREAM}/psxrecomp/runtime/src/gpu_gl_renderer.c"
 
 actual_game="$(git -C "${UPSTREAM}" rev-parse HEAD)"
 actual_framework="$(git -C "${UPSTREAM}/psxrecomp" rev-parse HEAD)"

@@ -1,51 +1,55 @@
 # Mega Man 8 Recomp — Android ARMv7
 
-Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), using the Android-enabled [PSXRecomp framework fork](https://github.com/dguillot-gh/psxrecomp-android) and its shared Android launcher/touch controls.
+Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), using the Android-enabled [PSXRecomp framework fork](https://github.com/dguillot-gh/psxrecomp-android).
 
-> **Status: runtime integration is being validated.** CI builds an ARMv7 SDL shell and separately compiles the PSXRecomp runtime for ARMv7 without game code. Neither test alone proves the game is playable. The real game build requires locally generated C from a matching legal disc and a physical-device gameplay test.
+> **Current proven state:** workflow run #36 built the Android shell APK and separately compiled/linked the PSXRecomp runtime for 32-bit ARM. The shell is not the game; the runtime smoke artifact contains no generated Mega Man 8 game code. New CI splits these checks into independent jobs and validates the APK's package metadata, signature, ZIP structure, ABI and native entry point.
 
-## Target and build setup
+## Target and pinned toolchain
 
-- Android ABI: `armeabi-v7a` (32-bit ARM)
-- Minimum Android API: 26
-- Native build: Android NDK 27.2.12479018 + CMake
-- SDL3: 3.4.10, statically linked into `libmain.so`
-- Java UI: framework-provided start menu, file picker and touch/gamepad overlay
-- Game data: supplied by the user; this repository does not contain a disc image or generated game C.
+- Android ABI: `armeabi-v7a` (32-bit ARM), minimum API 26
+- Java/JDK: 17; Gradle 8.9; Android Gradle Plugin 8.7.3
+- Android SDK platform 35; Build Tools 35.0.0
+- Android NDK 27.2.12479018; CMake 3.22.1; Ninja 1.11.1.3 (runtime smoke job)
+- SDL3 3.4.10, pinned to commit `8e37db5e797b6167f3a00d697d816a684bd259c7`
+- The public game and Android-framework source revisions are pinned in `scripts/prepare-upstream.sh`.
 
-Run these commands from the repository root on a machine with Git, Python 3, Bash, CMake, Ninja and a supported C/C++ toolchain:
+## CI jobs
+
+The workflow at [GitHub Actions](https://github.com/maizon/Mega-Man-8-Recomp-Android-ARMv7/actions) has two independent jobs:
+
+1. **android-shell** builds a debug APK without a disc image or generated game C, then checks ZIP integrity, zip alignment, development signature, package ID, min/target SDK, launcher activity, ARMv7 ELF headers, `SDL_main` export and native dependencies. It also runs a negative CMake test to prove strict mode rejects missing generated game/OpenBIOS inputs. The artifact is explicitly named `SHELL-debug`.
+2. **android-runtime-smoke** compiles and links the real PSXRecomp runtime against SDL3 for ARMv7 without game-generated C. It publishes a separate `RUNTIME-SMOKE-NOT-GAME` library/report artifact. It is not an APK and not a playable game.
+
+Both jobs use a clean CMake/native build directory, fixed tool versions and pinned action commit SHAs. The shell job does not depend on the runtime job. The workflow supports push, pull request and manual `workflow_dispatch`.
+
+## Build the shell locally
+
+From the repository root, with Git, Python 3, Bash, Java 17, Gradle 8.9 and Android SDK/NDK installed:
 
 ```bash
 bash scripts/prepare-upstream.sh
-bash scripts/generate-game.sh "/path/to/your/Mega Man 8 (USA).cue"
-gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true assembleDebug
+git clone --depth 1 --branch release-3.4.10 https://github.com/libsdl-org/SDL.git third_party/SDL
+gradle -p android --no-daemon --no-build-cache clean assembleDebug
 ```
 
-The first script pins the game source and Android-enabled PSXRecomp framework and initializes its public submodules. It applies Android-only CMake settings to the ignored local checkout (disable the desktop recomp-ui launcher, Vulkan and rewind), an ARMv7 compatibility fix for an AArch64-only NEON reduction intrinsic, and a guard around a desktop OpenXR path that references `glReadBuffer` unavailable in Android GLESv2. It does not modify tracked upstream files in this repository.
+The CI uses the exact SDL commit listed above and verifies it after checkout. `prepare-upstream.sh` pins the game/framework sources and applies validated Android-only patches to the ignored `third_party/Mega-Man-8-Recomp/` checkout. It does not download a disc image or generated game C.
 
-The second script invokes the pinned framework's supported `psxrecomp_cli.py generate` workflow, validates the game and OpenBIOS outputs, and stages the generated OpenBIOS C files at the path expected by the game's CMake. Generation can download/build the framework's host-side emitters and toolchain. Use a matching USA multi-track `.cue` with its track files.
+## Prepare the full game build (requires the user's own legal disc)
 
-Generated C, prepared disc data and the framework checkout remain under the ignored `third_party/Mega-Man-8-Recomp/` directory. Do not commit or distribute disc images, generated game C, retail BIOS dumps or APKs containing generated game code.
+The pinned game configuration targets **Mega Man 8 USA, product ID SLUS-00453**. The generator script first verifies that every file referenced by the supplied `.cue` exists and that track 01's size, SHA-1 and MD5 match the identity values in the pinned upstream `game.toml`.
 
-## CI and strict mode
+```bash
+bash scripts/generate-game.sh "/path/to/your/Mega Man 8 (USA).cue"
+gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true clean assembleDebug
+```
 
-- GitHub Actions builds a debug ARMv7 shell APK and verifies the ELF architecture and exported `SDL_main` entry point.
-- A separate smoke build compiles and links the Android-enabled PSXRecomp runtime for `armeabi-v7a` without generated game code.
-- To build the real game, use `-PMM8_REQUIRE_GAME_RUNTIME=true`. This makes CMake fail if the Android framework or generated game/OpenBIOS inputs are missing, rather than silently producing the shell.
-- The downloadable CI APK is a development shell, not a playable Mega Man 8 build.
+The script invokes the upstream-supported `psxrecomp_cli.py generate` command, validates non-empty game/OpenBIOS C outputs, and stages OpenBIOS C at the location expected by the game CMake. Disc files and generated copyrighted game sources remain local and ignored; do not upload them to public repositories, CI artifacts or logs.
 
-## Upstream projects
+Strict mode verifies the exact pinned source revisions and rejects missing or empty generated C inputs. It never silently falls back to the shell when `MM8_REQUIRE_GAME_RUNTIME=ON`.
 
-- Game recompilation: https://github.com/omegakatana92/Mega-Man-8-Recomp
-- Android-enabled PSXRecomp framework: https://github.com/dguillot-gh/psxrecomp-android
-- Android build orchestration reference: https://github.com/dguillot-gh/psx-android
-- SDL3: https://github.com/libsdl-org/SDL
+## What is not yet proven
 
-## Remaining proof required
-
-1. Pass the runtime smoke build for Android ARMv7.
-2. Generate the real game C and OpenBIOS sources from the user's matching disc.
-3. Compile the full runtime and generated game C in strict mode for `armeabi-v7a`.
-4. Install on a physical ARMv7 Android device and verify startup, touch/gamepad input, rendering, audio and actual gameplay.
-
-A 99.9% success claim is not justified until the full generated-game build and device gameplay checks pass.
+- The shell APK is build-validated by CI, but it has not been claimed as installed on a physical ARMv7 device.
+- Runtime smoke proves native compilation/linking of the framework without generated game C, not full-game compilation.
+- A complete game requires the matching local disc, generated sources, a strict full build, installation and real gameplay checks on compatible hardware.
+- No honest 99.9% playability guarantee is possible before those tests pass.
