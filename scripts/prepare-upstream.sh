@@ -163,6 +163,7 @@ PY
 # Mali-focused renderer controls: expose both hardware backends while preserving software fallback.
 python3 - "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxMenu.java" "${UPSTREAM}/psxrecomp/runtime/android/java/com/psxrecomp/android/PsxGameActivity.java" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 menu_path, activity_path = map(Path, sys.argv[1:])
