@@ -42,8 +42,8 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 old = '[video]\nrenderer = "software"'
-new = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\noffer_vulkan = false'
-already = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\noffer_vulkan = false'
+new = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1'
+already = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1'
 if text.count(already) == 1:
     print("Android video defaults already applied: OpenGL, 16:9, native internal scale, Vulkan hidden.")
 elif text.count(old) == 1:
