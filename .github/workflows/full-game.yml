@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/mali-supreme-armv7
+  pull_request:
+    branches:
+      - feature/mali-supreme-armv7
   workflow_dispatch:
 
 permissions:
@@ -24,7 +27,7 @@ env:
 jobs:
   full-game:
     name: Generate game code and build full universal ARMv7 + ARM64 APK
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
