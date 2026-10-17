@@ -38,14 +38,13 @@ jobs:
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null
 
-      # Set up Gradle before fetching SDL: SDL ships its own wrapper JAR,
-      # which is unrelated to this app and can fail setup-gradle's wrapper validation.
+      # Run Gradle setup before fetching SDL: SDL ships an unrelated wrapper JAR.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      # Cache SDL source and native CMake state to avoid a full rebuild on every push.
+      # Cache source and native CMake state; Gradle action caches dependencies/build outputs.
       - name: Cache SDL3 source and native build state
         uses: actions/cache@v4
         with:
@@ -69,11 +68,28 @@ jobs:
       - name: Build debug APK for ARMv7
         run: gradle -p android --no-daemon --build-cache assembleDebug
 
-      - name: Verify APK exists
+      - name: Verify APK and native ABI
+        shell: bash
         run: |
-          test -s android/app/build/outputs/apk/debug/app-debug.apk
-          file android/app/build/outputs/apk/debug/app-debug.apk
-          sha256sum android/app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          file "$APK"
+          sha256sum "$APK"
+          unzip -l "$APK" | tee /tmp/apk-files.txt
+          grep -q 'lib/armeabi-v7a/libmain.so' /tmp/apk-files.txt
+          grep -q 'lib/armeabi-v7a/libSDL3.so' /tmp/apk-files.txt
+          if grep -Eq 'lib/(arm64-v8a|x86|x86_64)/' /tmp/apk-files.txt; then
+            echo "Unexpected non-ARMv7 native ABI found in APK" >&2
+            exit 1
+          fi
+          mkdir -p /tmp/apk-native
+          unzip -j "$APK" 'lib/armeabi-v7a/*.so' -d /tmp/apk-native
+          for lib in /tmp/apk-native/*.so; do
+            echo "Checking ELF architecture: $lib"
+            readelf -h "$lib" | grep -E 'Class:.*ELF32'
+            readelf -h "$lib" | grep -E 'Machine:.*ARM'
+          done
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
