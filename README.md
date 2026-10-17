@@ -2,7 +2,7 @@
 
 Independent Android porting effort for [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), using [CTR Native Android](https://github.com/Simon358/ctr-native-android) as an architectural reference.
 
-> **Status: early porting scaffold. Not yet a playable port.** The first milestone is a reproducible Android ARMv7 build pipeline. PSXRecomp runtime integration, game launch, rendering, audio, input mapping, and real-device validation remain work in progress.
+> **Status: real-runtime integration is in progress; not yet confirmed playable.** GitHub Actions has validated the Android ARMv7 SDL shell. The CMake project now has a guarded path to the upstream PSXRecomp runtime, but it activates only when all required generated game/OpenBIOS C files are present. A successful shell APK is not a playable game.
 
 ## Target
 
@@ -10,29 +10,58 @@ Independent Android porting effort for [Mega-Man-8-Recomp](https://github.com/om
 - Native build: Android NDK + CMake
 - App packaging: Gradle
 - CI: GitHub Actions; APK uploaded as a workflow artifact
+- SDL3: 3.4.10, matching the audited PSXRecomp dependency pin
 - Input goal: touchscreen + physical gamepads
-- Game data: users must provide their own legally obtained game dump; no ROM, BIOS dump, or copyrighted game assets are included.
+- Game data: users must provide their own legally obtained game dump; no disc image, BIOS dump, or copyrighted game assets are included.
 
-## Build
+## Build the CI shell
 
 Pushes and pull requests run the Android workflow in **Actions**. When a build succeeds, download the APK from the workflow run's **Artifacts** section.
 
-The CI build currently validates the Android application scaffold. It does **not** establish that the game runtime has been ported or that the APK can run Mega Man 8.
+Unless the real upstream checkout and generated inputs are present, this APK is only an SDL/Android/ARMv7 bring-up shell. It does not run Mega Man 8.
+
+## Prepare the upstream checkout
+
+On a machine with Git installed, from the repository root run:
+
+```bash
+bash scripts/prepare-upstream.sh
+```
+
+This pins the public game repository to the audited commit and initializes its submodules. It does **not** create generated game code and does not fetch a game disc or BIOS dump.
+
+The real runtime requires these local files under `third_party/Mega-Man-8-Recomp/`:
+
+- `generated/*_full.c` and/or `generated/*_full_*.c`
+- `generated/*_dispatch.c`
+- `bios-generated/OpenBIOS_full.c`
+- `bios-generated/OpenBIOS_dispatch.c`
+
+Generate the missing outputs using the upstream project's supported workflow and your own legally obtained game disc. The exact generation requirements may depend on the game revision and upstream toolchain; do not create placeholder C files to bypass the checks. These files are ignored by Git and must not be committed or distributed.
+
+To force Gradle/CMake to reject the shell fallback when building locally, add this argument to the CMake arguments in `android/app/build.gradle`:
+
+```gradle
+arguments '-DMM8_REQUIRE_GAME_RUNTIME=ON'
+```
+
+When the real inputs exist, CMake builds SDL3 3.4.10 as a shared library, adds the upstream game project, and verifies that the runtime target's output name is `main` for SDLActivity. This integration path still requires a successful NDK build and real-device gameplay validation.
 
 ## Upstream projects
 
 - Game recompilation: https://github.com/omegakatana92/Mega-Man-8-Recomp
+- PSXRecomp framework: https://github.com/omegakatana92/psxrecomp
 - Android reference: https://github.com/Simon358/ctr-native-android
 - SDL: https://github.com/libsdl-org/SDL
 
 ## Porting milestones
 
-1. Establish reproducible Android ARMv7 build and artifact upload.
-2. Audit upstream CMake, generated sources, PSXRecomp runtime, launcher/UI, and platform assumptions.
-3. Integrate SDL3 Android activity and native lifecycle.
-4. Port the PSXRecomp runtime and generated game sources, fixing Android/ARMv7 compiler incompatibilities.
-5. Add user-selected game data, touch/gamepad controls, audio and graphics configuration.
-6. Test startup and gameplay on a real ARMv7 device; document known issues and performance.
+1. Establish reproducible Android ARMv7 build and artifact upload. **Done for the shell.**
+2. Audit upstream CMake, generated sources, PSXRecomp runtime, launcher/UI, and platform assumptions. **Initial audit done.**
+3. Integrate SDL3 Android activity and a guarded native runtime path. **CMake path added; real target still needs validation.**
+4. Compile the actual PSXRecomp runtime and generated game sources for ARMv7, fixing NDK/compiler incompatibilities.
+5. Add/verify user-selected game data, touch/gamepad controls, audio and graphics configuration.
+6. Test startup and gameplay on a real ARMv7 device; document issues and performance.
 
 ## License and assets
 
