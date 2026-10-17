@@ -201,15 +201,6 @@ if old_call in activity:
     activity = activity.replace(old_call, 'renderer(toml)')
 elif 'renderer(toml)' not in activity:
     raise SystemExit("ERROR: expected renderer argument selection in PsxGameActivity")
-old_method = r'''private static boolean wantsGpu(File toml) {
-        try {
-            String s = new String(java.nio.file.Files.readAllBytes(toml.toPath()),
-                    java.nio.charset.StandardCharsets.UTF_8);
-            return java.util.regex.Pattern.compile("(?m)^\\s*renderer\\s*=\\s*\\\"opengl\\\"").matcher(s).find();
-        } catch (java.io.IOException e) {
-            return false;
-        }
-    }'''
 new_method = r'''private static String renderer(File toml) {
         try {
             String s = new String(java.nio.file.Files.readAllBytes(toml.toPath()),
@@ -224,9 +215,15 @@ new_method = r'''private static String renderer(File toml) {
         return "software";
     }'''
 if 'private static String renderer(File toml)' not in activity:
-    if activity.count(old_method) != 1:
-        raise SystemExit(f"ERROR: expected one wantsGpu method; count={activity.count(old_method)}")
-    activity = activity.replace(old_method, new_method, 1)
+    start_sig = "private static boolean wantsGpu(File toml) {"
+    end_sig = "\n    @Override\n    protected void onCreate(Bundle state) {"
+    if activity.count(start_sig) != 1 or activity.count(end_sig) != 1:
+        raise SystemExit("ERROR: expected unique renderer method boundaries")
+    start = activity.find(start_sig)
+    end = activity.find(end_sig, start)
+    if end <= start:
+        raise SystemExit("ERROR: renderer method boundaries are out of order")
+    activity = activity[:start] + new_method + "\n\n" + activity[end:]
 if 'wantsGpu(' in activity or activity.count('renderer(toml)') < 2:
     raise SystemExit("ERROR: PsxGameActivity renderer parsing failed post-patch validation")
 activity_path.write_text(activity, encoding="utf-8")
