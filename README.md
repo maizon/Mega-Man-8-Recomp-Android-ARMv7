@@ -1,65 +1,75 @@
-# Mega Man 8 Recomp — Android ARMv7
+# Mega Man 8 Recomp — Android (Universal ARMv7 + ARM64)
 
-Android porting project for [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), using the Android-enabled [PSXRecomp framework fork](https://github.com/dguillot-gh/psxrecomp-android).
+**Maintainer:** Maizon — [GitHub](https://github.com/maizon) · [Instagram](https://instagram.com/maicon_nasciment0)
 
-> **Current proven state:** workflow run #36 built the Android shell APK and separately compiled/linked the PSXRecomp runtime for 32-bit ARM. The shell is not the game; the runtime smoke artifact contains no generated Mega Man 8 game code. New CI splits these checks into independent jobs and validates the APK's package metadata, signature, ZIP structure, ABI and native entry point.
+Projeto independente de portabilidade Android baseado no [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp), no framework Android [PSXRecomp](https://github.com/dguillot-gh/psxrecomp-android) e no [SDL](https://github.com/libsdl-org/SDL).
 
-## Target and pinned toolchain
+> **Estado: experimental.** O APK de shell produzido pelo CI serve para validar o pacote Android e as bibliotecas nativas; não é um jogo completo nem uma versão jogável de Mega Man 8. Não há garantia de FPS ou compatibilidade em dispositivos específicos.
 
-- Android ABI: `armeabi-v7a` (32-bit ARM), minimum API 26
-- Java/JDK: 17; Gradle 8.9; Android Gradle Plugin 8.7.3
-- Android SDK platform 35; Build Tools 35.0.0
-- Android NDK 27.2.12479018; CMake 3.22.1; Ninja 1.11.1.3 (runtime smoke job)
-- SDL3 3.4.10, pinned to commit `8e37db5e797b6167f3a00d697d816a684bd259c7`
-- The public game and Android-framework source revisions are pinned in `scripts/prepare-upstream.sh`.
+## Aviso importante: conteúdo e direitos autorais
 
-## CI jobs
+- Este repositório pretende distribuir código-fonte e documentação, não imagens de disco, BIOS, assets, música, vídeos, dados proprietários ou código gerado a partir do jogo.
+- Mega Man, Mega Man 8 e seus elementos protegidos pertencem aos respectivos titulares. Este projeto é independente, não oficial e não é afiliado, patrocinado ou endossado pela Capcom.
+- Não publique nem distribua ROMs, arquivos BIN/CUE/ISO, BIOS, assets, código gerado do jogo ou APK que incorpore conteúdo protegido sem obter as permissões necessárias.
+- Compilar, modificar ou renomear um arquivo não concede direitos de redistribuição. Usar uma cópia pessoal também não significa automaticamente que seja permitido distribuir um APK derivado.
+- Os projetos upstream e dependências mantêm suas próprias licenças. Consulte [avisos de terceiros](docs/THIRD_PARTY_NOTICES.md) antes de reutilizar ou redistribuir componentes.
+- Este repositório não declara uma licença geral para todo o código do projeto. Não adicione uma licença ampla sem confirmar que você tem os direitos sobre cada parte abrangida.
 
-The workflow at [GitHub Actions](https://github.com/maizon/Mega-Man-8-Recomp-Android-ARMv7/actions) has two independent jobs:
+**A publicação deste código não garante risco jurídico zero.** Revise o histórico Git, todos os arquivos e o APK exato que pretende publicar. Este README não é aconselhamento jurídico.
 
-1. **android-shell** builds a debug APK without a disc image or generated game C, then checks ZIP integrity, zip alignment, development signature, package ID, min/target SDK, launcher activity, ARMv7 ELF headers, `SDL_main` export and native dependencies. It also runs a negative CMake test to prove strict mode rejects missing generated game/OpenBIOS inputs. The artifact is explicitly named `SHELL-debug`.
-2. **android-runtime-smoke** compiles and links the real PSXRecomp runtime against SDL3 for ARMv7 without game-generated C. It publishes a separate `RUNTIME-SMOKE-NOT-GAME` library/report artifact. It is not an APK and not a playable game.
+## Recursos e arquitetura
 
-Both jobs use a clean CMake/native build directory, fixed tool versions and pinned action commit SHAs. The shell job does not depend on the runtime job. The workflow supports push, pull request and manual `workflow_dispatch`.
+- Integração Android direcionada a ARMv7 (32-bit) e ARM64 (64-bit).
+- Scripts de preparação de dependências e patches de compatibilidade.
+- Workflow público para compilar/validar o shell sem dados do jogo.
+- Fluxo local opcional de geração/compilação completa, que exige dados fornecidos localmente pelo usuário e não autoriza a redistribuição do resultado.
+- Relatórios de desempenho e limitações em [docs/ANDROID-ARMV7-PERFORMANCE.md](docs/ANDROID-ARMV7-PERFORMANCE.md).
 
-## Build the shell locally
+### Limitações conhecidas
 
-From the repository root, with Git, Python 3, Bash, Java 17, Gradle 8.9 and Android SDK/NDK installed:
+- O artefato shell do CI não é jogável.
+- O runtime smoke test não inclui o código gerado do jogo.
+- O desempenho no Allwinner H726 ainda não foi diagnosticado; foi reportado desempenho de aproximadamente 1–2 FPS. Selecionar OpenGL na configuração não comprova que o renderizador OpenGL inicializou com sucesso.
+- Vulkan, GPUs Mali e desempenho em dispositivos físicos continuam experimentais.
+- Uma compilação bem-sucedida não substitui testes reais de instalação, execução, estabilidade e desempenho.
 
-```bash
-bash scripts/prepare-upstream.sh
-git clone --depth 1 --branch release-3.4.10 https://github.com/libsdl-org/SDL.git third_party/SDL
-gradle -p android --no-daemon --no-build-cache clean assembleDebug
-```
+## Compilação do shell (sem dados do jogo)
 
-The CI uses the exact SDL commit listed above and verifies it after checkout. `prepare-upstream.sh` pins the game/framework sources and applies validated Android-only patches to the ignored `third_party/Mega-Man-8-Recomp/` checkout. It does not download a disc image or generated game C.
+Requisitos de referência: JDK 17, Git, Python 3, Gradle 8.9, Android SDK/NDK e CMake nas versões fixadas pelo workflow.
 
-## One-command full-game Android build (requires the user's own legal disc)
+1. Clone este repositório.
+2. Execute `bash scripts/prepare-upstream.sh`.
+3. Obtenha SDL3 na versão/commit fixados no workflow, no caminho `third_party/SDL`.
+4. Execute `gradle -p android --no-daemon clean assembleDebug`.
 
-Run the build driver to prepare pinned public sources, validate the matching disc, generate game code locally, compile in strict mode, and verify the final ARMv7 APK. It refuses to silently fall back to the shell and keeps generated copyrighted sources local.
+O shell não inclui os dados do jogo e não deve ser anunciado como uma versão jogável. Para as versões exatas da toolchain, consulte [android.yml](.github/workflows/android.yml).
 
-```bash
-bash scripts/build-full-android.sh "/path/to/your/Mega Man 8 (USA).cue"
-```
+## Compilação local completa
 
-The script expects Java 17, Git, Python 3, Gradle 8.9, and an Android SDK/NDK configured in the environment. It verifies the game/framework/SDL source pins, strict-mode result, APK signature, package metadata, ARMv7 ELF headers and exported `SDL_main`, then writes a SHA-256 build report under `android/app/build/mm8-final-build-report.txt`. It still does not prove physical-device gameplay.
+O script `scripts/build-full-android.sh` é um fluxo técnico local e pode exigir uma imagem de disco compatível fornecida pelo usuário. Use apenas materiais cuja utilização seja legal para você. O resultado pode conter código derivado ou conteúdo protegido: **não o publique nem o distribua sem confirmar que tem autorização para todos os componentes incluídos**.
 
-## Prepare the full game build (requires the user's own legal disc)
+Não envie imagens de disco, BIOS, código gerado do jogo ou APKs completos para o repositório, Issues, Pull Requests, Releases ou artefatos públicos do Actions.
 
-The pinned game configuration targets **Mega Man 8 USA, product ID SLUS-00453**. The generator script first verifies that every file referenced by the supplied `.cue` exists and that track 01's size, SHA-1 and MD5 match the identity values in the pinned upstream `game.toml`.
+Consulte [guia de compilação](docs/BUILDING.md) e [guia de Release manual](docs/RELEASE.md).
 
-```bash
-bash scripts/generate-game.sh "/path/to/your/Mega Man 8 (USA).cue"
-gradle -p android --no-daemon -PMM8_REQUIRE_GAME_RUNTIME=true clean assembleDebug
-```
+## APK universal e publicação manual
 
-The script invokes the upstream-supported `psxrecomp_cli.py generate` command, validates non-empty game/OpenBIOS C outputs, and stages OpenBIOS C at the location expected by the game CMake. Disc files and generated copyrighted game sources remain local and ignored; do not upload them to public repositories, CI artifacts or logs.
+Um APK universal pode conter bibliotecas nativas para `armeabi-v7a` e `arm64-v8a`. Isso não significa que o jogo esteja completo ou funcione corretamente em ambas as arquiteturas.
 
-Strict mode verifies the exact pinned source revisions and rejects missing or empty generated C inputs. It never silently falls back to the shell when `MM8_REQUIRE_GAME_RUNTIME=ON`.
+Antes de publicar um APK manualmente:
+1. Confirme a origem e os direitos de todos os componentes incluídos.
+2. Verifique o conteúdo do APK e as bibliotecas nativas para ambas as arquiteturas.
+3. Não publique assets, BIOS, imagem de disco ou código gerado do jogo sem autorização.
+4. Informe a versão, o SHA-256, as arquiteturas e o estado real dos testes.
+5. Não apresente o APK shell como jogo completo.
 
-## What is not yet proven
+Veja [docs/RELEASE.md](docs/RELEASE.md). O CI atual valida artefatos de desenvolvimento sem dados do jogo; não é um canal de distribuição de uma versão completa.
 
-- The shell APK is build-validated by CI, but it has not been claimed as installed on a physical ARMv7 device.
-- Runtime smoke proves native compilation/linking of the framework without generated game C, not full-game compilation.
-- A complete game requires the matching local disc, generated sources, a strict full build, installation and real gameplay checks on compatible hardware.
-- No honest 99.9% playability guarantee is possible before those tests pass.
+## Créditos
+
+- **Maizon** — integração Android, automação de build e investigação de desempenho.
+- [Mega-Man-8-Recomp](https://github.com/omegakatana92/Mega-Man-8-Recomp) — projeto upstream de recompilação.
+- [PSXRecomp Android framework fork](https://github.com/dguillot-gh/psxrecomp-android) — integração do runtime Android.
+- [SDL](https://github.com/libsdl-org/SDL) — biblioteca multimídia multiplataforma.
+
+Os créditos não substituem o cumprimento das licenças e permissões de cada projeto.
