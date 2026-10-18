@@ -42,14 +42,14 @@ import sys
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
 old = '[video]\nrenderer = "software"'
-new = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\noffer_vulkan = false'
-already = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\noffer_vulkan = false'
+new = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\nantialiasing = false'
+already = '[video]\nrenderer = "opengl"\naspect_ratio = "16:9"\nsupersampling = 1\nantialiasing = false'
 if text.count(already) == 1:
-    print("Android video defaults already applied: OpenGL, 16:9, native internal scale, Vulkan hidden.")
+    print("Android video defaults already applied: OpenGL, 16:9, native internal scale, AA off; Vulkan available as experimental option.")
 elif text.count(old) == 1:
     text = text.replace(old, new, 1)
     path.write_text(text, encoding="utf-8")
-    print("Applied Android video defaults: OpenGL, 16:9, native internal scale, Vulkan hidden.")
+    print("Applied Android video defaults: OpenGL, 16:9, native internal scale, AA off; Vulkan available as experimental option.")
 else:
     raise SystemExit(
         f"ERROR: expected exactly one known [video] block (original={text.count(old)}, tuned={text.count(already)}); refusing unsafe config edit."
